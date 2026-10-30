@@ -9,7 +9,7 @@ import bevy_pbr::render::{
 
 struct Beam {
     color: vec4<f32>,
-    /// x: fade, y: ground height, z: top height, w: per-beam seed.
+    /// x: fade, y: lowest ground under the beam, z: top height, w: per-beam seed.
     params: vec4<f32>,
 }
 
@@ -28,8 +28,9 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let ground = beam.params.y;
     let top = beam.params.z;
     let h = clamp((p.y - ground) / (top - ground), 0.0, 1.0);
-    // Strongest just under the leaves, thinning towards the ground, gone at the very bottom.
-    let along = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.75, 1.0, h)) * mix(0.55, 1.0, h);
+    // Strongest just under the leaves, thinning towards the ground but reaching it (the end
+    // is buried; `ground` is the lowest ground under the beam).
+    let along = smoothstep(0.0, 0.4 / (top - ground), h) * (1.0 - smoothstep(0.75, 1.0, h)) * mix(0.55, 1.0, h);
 
     let seed = beam.params.w;
     // A bundle of streaks rather than one flat sheet: bright rays around the beam's

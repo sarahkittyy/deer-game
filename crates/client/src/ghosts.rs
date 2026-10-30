@@ -25,17 +25,23 @@ const TAG_FAR: f32 = 45.0;
 
 #[derive(Component)]
 pub struct Ghost {
-    id: u32,
+    pub id: u32,
     snapshots: VecDeque<(f64, Pose)>,
-    tag: Entity,
+    pub tag: Entity,
 }
 
 #[derive(Component)]
-struct NameTag;
+pub struct NameTag;
 
 /// Names of the players the server told us about, by id.
 #[derive(Resource, Default)]
-struct Roster(HashMap<u32, (String, bool)>);
+pub struct Roster(HashMap<u32, (String, bool)>);
+
+impl Roster {
+    pub fn name(&self, id: u32) -> Option<String> {
+        self.0.get(&id).map(|(name, _)| name.clone())
+    }
+}
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<Roster>()
@@ -177,7 +183,24 @@ fn interpolate(
         );
         w.0 = pos;
         t.rotation = Quat::from_rotation_y(lerp_angle(a.body_yaw, b.body_yaw, f));
+        // Knocked flying: the whole body turned about its middle, and the legs limp.
+        let tumble = match (a.tumble, b.tumble) {
+            (Some(ta), Some(tb)) => Some((
+                Quat::from_array(ta.rot).slerp(Quat::from_array(tb.rot), f),
+                ta.fall + (tb.fall - ta.fall) * f,
+            )),
+            (Some(k), None) | (None, Some(k)) => Some((Quat::from_array(k.rot), k.fall)),
+            (None, None) => None,
+        };
+        anim.knock = tumble.map(|(_, fall)| fall);
+        if let Some((rot, _)) = tumble {
+            let c = Vec3::Y * crate::knock::CENTER;
+            let p = pos + c - rot.normalize() * c;
+            w.0 = Vec3::new(wrap(p.x), p.y, wrap(p.z));
+            t.rotation = rot.normalize();
+        }
         anim.speed = a.speed + (b.speed - a.speed) * f;
+        anim.pace = b.pace;
         anim.head_yaw = a.head_yaw + (b.head_yaw - a.head_yaw) * f;
         anim.head_pitch = a.head_pitch + (b.head_pitch - a.head_pitch) * f;
         anim.action = if f < 0.5 { a.action } else { b.action };
@@ -192,7 +215,7 @@ fn interpolate(
 /// the camera's `Transform` (it has no parent, so it is its global transform) as the player
 /// code just set it, and each ghost's wrapped position placed near the player's, rather than
 /// the `GlobalTransform`s, which are only updated after `Update` and would be a frame old.
-fn place_tags(
+pub fn place_tags(
     camera: Single<(&Camera, &Transform), With<MainCamera>>,
     ui_size: Single<&ComputedNode, With<crate::ui::UiRoot>>,
     focus: Res<crate::wrap::Focus>,

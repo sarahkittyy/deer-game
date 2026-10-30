@@ -3,24 +3,29 @@
 mod ambient;
 mod audio;
 mod bushes;
+mod chat;
 mod debug;
 mod deer;
 mod env;
 mod foliage;
 mod ghosts;
+mod hud;
 mod interact;
+mod knock;
 mod lod;
 mod net;
 mod player;
 mod render_scale;
 mod ripples;
 mod shafts;
+mod sniff;
 mod terrain;
 mod ui;
 mod vegetation;
 mod water;
 #[cfg(target_arch = "wasm32")]
 mod web;
+mod wolf;
 mod wrap;
 
 use bevy::{asset::AssetMetaCheck, pbr::DefaultOpaqueRendererMethod, prelude::*};
@@ -103,6 +108,11 @@ fn main() {
             shafts::plugin,
             render_scale::plugin,
             ripples::plugin,
+            hud::plugin,
+            chat::plugin,
+            sniff::plugin,
+            wolf::plugin,
+            knock::plugin,
         ));
     #[cfg(target_arch = "wasm32")]
     app.add_plugins(web::plugin);

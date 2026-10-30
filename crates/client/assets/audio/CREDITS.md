@@ -478,3 +478,35 @@ encoded as Ogg Vorbis quality 4 (libvorbis).
 - Attribution required: no. Optional courtesy credit: "Wading in Shallow Water.wav" by ryansitz (https://freesound.org/people/ryansitz/sounds/342932/), CC0.
 - Cut: 4.82 to 5.16 s of the source; final length 0.276 s
 - Processing: mono (source is dual-mono); highpass=f=120:poles=2,highpass=f=120:poles=2; afftdn denoise; leading/trailing quiet trimmed; 100 ms fade-out; normalised to -22.3 LUFS (looped-file loudness, same measure as step_*.ogg; peak <= -1 dBFS)
+
+## Wolf
+
+| File | Duration | Source | Author | Licence | Cut from source (s) |
+|---|---|---|---|---|---|
+| `wolf_bark_1.ogg` | 0.34 s | [Large Dog Barking](https://freesound.org/people/Sheyvan/sounds/522921/) | Sheyvan | CC0 1.0 | 0.78 to 1.12 |
+| `wolf_bark_2.ogg` | 0.32 s | [Large Dog Barking](https://freesound.org/people/Sheyvan/sounds/522921/) | Sheyvan | CC0 1.0 | 1.36 to 1.68 |
+| `wolf_bark_3.ogg` | 0.36 s | [Large Dog Barking](https://freesound.org/people/Sheyvan/sounds/522921/) | Sheyvan | CC0 1.0 | 2.04 to 2.4 |
+| `wolf_bark_4.ogg` | 0.45 s | [Large dog barking](https://freesound.org/people/JoMungus/sounds/719810/) | JoMungus | CC0 1.0 | whole file |
+| `wolf_bark_5.ogg` | 0.46 s | [R29-56-Large Dog Barks Outdoors.wav](https://freesound.org/people/craigsmith/sounds/479646/) | craigsmith | CC0 1.0 | 5.4 to 5.86 |
+| `wolf_bark_6.ogg` | 0.50 s | [R29-56-Large Dog Barks Outdoors.wav](https://freesound.org/people/craigsmith/sounds/479646/) | craigsmith | CC0 1.0 | 10.18 to 10.68 |
+| `wolf_attack_1.ogg` | 0.85 s | [Dog_Bark_Agressive.wav](https://freesound.org/people/ivolipa/sounds/332176/) | ivolipa | CC0 1.0 | 0.1 to 0.95 |
+| `wolf_attack_2.ogg` | 0.71 s | [Agressive_Dog_Barks.wav](https://freesound.org/people/ivolipa/sounds/332173/) | ivolipa | CC0 1.0 | 4.24 to 4.95 |
+| `wolf_attack_3.ogg` | 1.15 s | [Agressive_Dog_Barks.wav](https://freesound.org/people/ivolipa/sounds/332173/) | ivolipa | CC0 1.0 | 7.55 to 8.7 |
+| `wolf_attack_4.ogg` | 0.87 s | [Large Dog Aggressive Bark.mp3](https://freesound.org/people/mrrap4food/sounds/619045/) | mrrap4food | CC0 1.0 | 3.58 to 4.45 |
+| `wolf_growl_1.ogg` | 3.10 s | [21_Lobo_gruñendo.wav](https://freesound.org/people/JoseAgudelo/sounds/472401/) | JoseAgudelo | CC0 1.0 | 0.3 to 3.4 |
+| `wolf_growl_2.ogg` | 3.00 s | [21_Lobo_gruñendo.wav](https://freesound.org/people/JoseAgudelo/sounds/472401/) | JoseAgudelo | CC0 1.0 | 3.9 to 6.9 |
+| `wolf_growl_3.ogg` | 3.30 s | [21_Lobo_gruñendo.wav](https://freesound.org/people/JoseAgudelo/sounds/472401/) | JoseAgudelo | CC0 1.0 | 7.4 to 10.7 |
+| `wolf_growl_4.ogg` | 1.55 s | [dog_growling_mono_4824.wav](https://freesound.org/people/Mystikuum/sounds/401820/) | Mystikuum | CC0 1.0 | 9 to 10.55 |
+| `wolf_snarl_1.ogg` | 1.20 s | [R01-63-Dog Snarling and Attacking.wav](https://freesound.org/people/craigsmith/sounds/479633/) | craigsmith | CC0 1.0 | 3.25 to 4.45 |
+| `wolf_snarl_2.ogg` | 0.65 s | [R01-63-Dog Snarling and Attacking.wav](https://freesound.org/people/craigsmith/sounds/479633/) | craigsmith | CC0 1.0 | 8.75 to 9.4 |
+| `wolf_paw_1.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 2.705 to 2.865 |
+| `wolf_paw_2.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 2.97 to 3.13 |
+| `wolf_paw_3.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 3.285 to 3.445 |
+| `wolf_paw_4.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 3.46 to 3.62 |
+| `wolf_paw_5.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 3.735 to 3.895 |
+| `wolf_paw_6.ogg` | 0.16 s | [Dog Running Past](https://freesound.org/people/qubodup/sounds/827320/) | qubodup | CC0 1.0 | 4.055 to 4.215 |
+| `sniff_1.ogg` | 0.67 s | [Dog Sniffing (Near Distance)](https://freesound.org/people/ralph.whitehead/sounds/331449/) | ralph.whitehead | CC0 1.0 | 1.95 to 2.62 |
+
+The wolf sounds (`wolf_*.ogg`) were cut the same way, except that they were encoded with FFmpeg's built-in
+Vorbis encoder (two identical channels, since it only writes stereo) instead of libvorbis, and the paw steps
+were also low-passed at 5 kHz.

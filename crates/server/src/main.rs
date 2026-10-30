@@ -2,6 +2,8 @@
 //! everyone's poses back as snapshots, and owns the berry bushes so a berry eaten by one deer is
 //! gone for all of them.
 
+mod wolf;
+
 use axum::{
     Router,
     extract::{
@@ -29,6 +31,8 @@ const REGROW: Duration = Duration::from_secs(25);
 const MAX_PLAYERS: usize = 256;
 /// Messages a client may send per second before the extras are dropped.
 const MAX_MSGS_PER_SEC: u32 = 40;
+/// Shortest time between two chat lines from one deer; faster ones are dropped.
+const CHAT_GAP: Duration = Duration::from_millis(900);
 /// Frames queued for a slow client before it is cut off.
 const SEND_QUEUE: usize = 256;
 
@@ -45,6 +49,7 @@ struct Shared {
     regrow_at: Vec<Option<Instant>>,
     players: HashMap<u32, Player>,
     next_id: u32,
+    wolves: wolf::Pack,
 }
 
 type AppState = Arc<Mutex<Shared>>;
@@ -89,8 +94,19 @@ impl Shared {
             .iter()
             .filter_map(|(&id, p)| p.pose.map(|pose| (id, pose)))
             .collect();
+        // Two steps a tick: wolves turn and dodge trunks at speed.
+        let mut events = Vec::new();
+        for _ in 0..2 {
+            self.wolves
+                .tick(0.5 / TICK_HZ, &self.world, &poses, &mut events);
+        }
+        for ev in &events {
+            self.broadcast(ev, None);
+        }
         if !poses.is_empty() {
             self.broadcast(&ServerMsg::Snapshot { poses }, None);
+            let wolves = self.wolves.states(&self.world);
+            self.broadcast(&ServerMsg::Wolves(wolves), None);
         }
     }
 
@@ -147,7 +163,10 @@ async fn main() {
         bushes.len(),
         world.lakes.len()
     );
+    // Rare: a few wolves in the whole forest, unless DEER_WOLVES says otherwise.
+    let wolves = wolf::Pack::new(&world, env_or("DEER_WOLVES", 5));
     let state: AppState = Arc::new(Mutex::new(Shared {
+        wolves,
         world,
         regrow_at: vec![None; bushes.len()],
         bushes,
@@ -276,6 +295,7 @@ async fn client(socket: WebSocket, state: AppState) {
     let mut recv_task = tokio::spawn(async move {
         let mut window = Instant::now();
         let mut count = 0u32;
+        let mut last_chat: Option<Instant> = None;
         while let Some(Ok(msg)) = stream.next().await {
             let Message::Binary(bytes) = msg else {
                 if matches!(msg, Message::Close(_)) {
@@ -302,6 +322,20 @@ async fn client(socket: WebSocket, state: AppState) {
                     generation,
                     berry,
                 }) => recv_state.lock().unwrap().eat(id, slot, generation, berry),
+                Some(ClientMsg::Chat(raw)) => {
+                    if last_chat.is_some_and(|t| t.elapsed() < CHAT_GAP) {
+                        continue;
+                    }
+                    if let Some(text) = protocol::clean_chat(&raw) {
+                        last_chat = Some(Instant::now());
+                        info!("{id} says {text:?}");
+                        // The sender shows its own line already.
+                        recv_state
+                            .lock()
+                            .unwrap()
+                            .broadcast(&ServerMsg::Chat { id, text }, Some(id));
+                    }
+                }
                 Some(_) => {}
                 None => warn!("{id}: undecodable message"),
             }
@@ -321,7 +355,19 @@ async fn client(socket: WebSocket, state: AppState) {
 
 fn pose_ok(p: &Pose) -> bool {
     p.pos.iter().all(|v| v.is_finite() && v.abs() < 10_000.0)
-        && [p.body_yaw, p.head_yaw, p.head_pitch, p.speed]
-            .iter()
-            .all(|v| v.is_finite())
+        && [
+            p.body_yaw,
+            p.head_yaw,
+            p.head_pitch,
+            p.speed,
+            p.pace,
+            p.look,
+        ]
+        .iter()
+        .chain(
+            p.tumble
+                .iter()
+                .flat_map(|t| t.rot.iter().chain(&t.vel).chain([&t.fall])),
+        )
+        .all(|v| v.is_finite())
 }

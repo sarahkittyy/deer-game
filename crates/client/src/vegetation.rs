@@ -214,9 +214,9 @@ pub struct Ring {
     pub r: f32,
 }
 
-const MAX_RINGS: usize = 8;
-/// Rings are kept up to this height: above the deer and the camera nothing collides.
-const RING_TOP: f32 = 4.0;
+const MAX_RINGS: usize = 32;
+/// Rings are kept up to this height: a deer knocked flying (`knock`) can hit a trunk high up.
+const RING_TOP: f32 = 40.0;
 
 /// Where one tree's trunk and crown are, as drawn: for collisions and the light shafts.
 #[derive(Clone, Copy, Debug)]
@@ -564,7 +564,8 @@ fn trace_trunk(mesh: &Mesh, t: Transform) -> Vec<(f32, Vec2, f32)> {
     // Where to look for the trunk in the next slice: anywhere near the origin at first (the
     // lowest slice is below any branches, so a wide look only finds the trunk).
     let mut near = 2.0f32;
-    for k in 0..12 {
+    // Up into the crown, until the trunk splits into branches.
+    for k in 0..64 {
         let lo = -0.1 + k as f32 * STEP;
         let hi = lo + SLICE;
         let slice: Vec<Vec2> = pts

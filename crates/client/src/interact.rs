@@ -156,7 +156,7 @@ fn pick(
 fn highlight(
     target: Res<Target>,
     look: Option<Res<BerryLook>>,
-    mut berries: Query<(Entity, &mut MeshMaterial3d<StandardMaterial>), With<Berry>>,
+    mut berries: Query<(Entity, &Berry, &mut MeshMaterial3d<StandardMaterial>)>,
     mut cross: Query<&mut Visibility, (With<Crosshair>, Without<CursorIcon>)>,
     mut icons: Query<(&CursorIcon, &mut Visibility), Without<Crosshair>>,
     mut last: Local<Option<Entity>>,
@@ -173,11 +173,12 @@ fn highlight(
         && *last != now
     {
         for e in [*last, now].into_iter().flatten() {
-            if let Ok((e, mut m)) = berries.get_mut(e) {
+            if let Ok((e, berry, mut m)) = berries.get_mut(e) {
+                let kind = berry.kind as usize;
                 m.0 = if Some(e) == now {
-                    look.glow.clone()
+                    look.glow[kind].clone()
                 } else {
-                    look.normal.clone()
+                    look.normal[kind].clone()
                 };
             }
         }
@@ -300,6 +301,7 @@ fn bite(
     mut bushes: ResMut<Bushes>,
     mut net: ResMut<Net>,
     mut cooldown: ResMut<Cooldown>,
+    mut heart: Option<ResMut<crate::hud::Heart>>,
     mut deer: Query<(&mut LocalDeer, &Mouth)>,
 ) {
     let Ok((mut d, mouth)) = deer.single_mut() else {
@@ -341,6 +343,9 @@ fn bite(
                 berry: bite.index,
             });
             commands.trigger(Sfx::Eat(bite.at));
+            if let Some(heart) = heart.as_mut() {
+                heart.eat_berry();
+            }
         }
     } else {
         // Chew: the head stays put, bobbing a little.

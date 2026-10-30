@@ -42,7 +42,7 @@ pub struct BeamMaterial {
 #[derive(ShaderType, Debug, Clone, Copy)]
 struct BeamUniform {
     color: Vec4,
-    /// x: fade (0..1), y: ground height, z: top height, w: seed for the shimmer.
+    /// x: fade (0..1), y: lowest ground under the beam, z: top height, w: seed for the shimmer.
     params: Vec4,
 }
 
@@ -299,8 +299,21 @@ fn rebuild(
         // A slanted beam's footprint is stretched by 1 / sin(elevation); size the beam so its
         // footprint matches the patch of light.
         let radius = (area * d.y / std::f32::consts::PI).sqrt().clamp(0.3, 2.4);
-        let length = CANOPY_TOP / d.y;
-        let foot = Vec3::new(wrap(c.x), ground, wrap(c.y));
+        // The beam ends below the lowest ground anywhere under its footprint (and its slanted
+        // end below that again), so the terrain always hides the end: on a slope a beam cut
+        // off at the middle's height would stop in mid-air on the downhill side.
+        let reach = radius / d.y + 0.5;
+        let low = (0..8)
+            .map(|i| {
+                let a = i as f32 * std::f32::consts::FRAC_PI_4;
+                w.height(c.x + a.cos() * reach, c.y + a.sin() * reach)
+            })
+            .fold(ground, f32::min);
+        let bottom = low - radius * (1.0 - d.y * d.y).sqrt() - 0.3;
+        let top = ground + CANOPY_TOP;
+        let length = (top - bottom) / d.y;
+        let axis = Vec3::new(wrap(c.x), ground, wrap(c.y));
+        let foot = axis + d * ((bottom - ground) / d.y);
         let mid = foot + d * length * 0.5;
         let seed = (key.0.wrapping_mul(73856093) ^ key.1.wrapping_mul(19349663)) as u32 % 1000;
         commands.spawn((
@@ -313,7 +326,7 @@ fn rebuild(
             MeshMaterial3d(materials.add(BeamMaterial {
                 beam: BeamUniform {
                     color: Vec4::new(1.0, 0.8, 0.52, 1.0),
-                    params: Vec4::new(0.0, ground, ground + CANOPY_TOP, seed as f32),
+                    params: Vec4::new(0.0, low, top, seed as f32),
                 },
             })),
             Wrapped(mid),

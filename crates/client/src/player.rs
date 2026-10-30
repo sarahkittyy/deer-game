@@ -75,7 +75,11 @@ impl LocalDeer {
             head_yaw: anim.head_yaw,
             head_pitch: anim.head_pitch,
             speed: anim.speed,
+            pace: anim.pace,
             action: anim.action,
+            // Filled in by `net::send_pose`, which knows the camera and any tumble.
+            look: self.yaw,
+            tumble: None,
         }
     }
 
@@ -106,7 +110,13 @@ pub fn plugin(app: &mut App) {
     app.init_resource::<Look>()
         .add_systems(
             Update,
-            (grab_cursor, mouse_look, movement, follow_camera)
+            (
+                grab_cursor,
+                mouse_look,
+                movement,
+                crate::knock::tumble,
+                follow_camera,
+            )
                 .chain()
                 .in_set(PlayerSet)
                 .run_if(in_state(AppState::Playing)),
@@ -154,6 +164,7 @@ pub fn spawn_local(
 fn grab_cursor(
     mouse: Res<ButtonInput<MouseButton>>,
     keys: Res<ButtonInput<KeyCode>>,
+    chat: Res<crate::chat::ChatOpen>,
     window: Single<(&Window, &mut CursorOptions), With<PrimaryWindow>>,
 ) {
     let (window, mut cursor) = window.into_inner();
@@ -173,7 +184,8 @@ fn grab_cursor(
         cursor.grab_mode = CursorGrabMode::Locked;
         cursor.visible = false;
     }
-    if keys.just_pressed(KeyCode::Escape) {
+    // Esc with the chat box open only closes the box.
+    if keys.just_pressed(KeyCode::Escape) && !chat.0 {
         cursor.grab_mode = CursorGrabMode::None;
         cursor.visible = true;
     }
@@ -213,13 +225,20 @@ fn movement(
     world: Res<GameWorld>,
     shapes: Option<Res<TreeShapes>>,
     look: Res<Look>,
+    chat: Res<crate::chat::ChatOpen>,
+    heart: Option<Res<crate::hud::Heart>>,
     mut focus: ResMut<Focus>,
-    mut q: Query<(&mut LocalDeer, &mut DeerAnim, &mut Transform, &mut Reach)>,
+    // A knocked-over deer is run by `knock::tumble` instead.
+    mut q: Query<
+        (&mut LocalDeer, &mut DeerAnim, &mut Transform, &mut Reach),
+        Without<crate::knock::Knocked>,
+    >,
 ) {
     let dt = time.delta_secs().min(0.05);
     let w = &world.0;
     for (mut d, mut anim, mut t, mut reach) in &mut q {
-        let key = |k| !d.locked && keys.pressed(k);
+        // Typing a chat line, or held still for a bite: the keys do not walk.
+        let key = |k| !d.locked && !chat.0 && keys.pressed(k);
         let f = key(KeyCode::KeyW) as i32 as f32 - key(KeyCode::KeyS) as i32 as f32;
         let r = key(KeyCode::KeyD) as i32 as f32 - key(KeyCode::KeyA) as i32 as f32;
         // Sprint is forward only: any strafe or backing up cancels it.
@@ -248,7 +267,10 @@ fn movement(
         } else {
             Vec3::ZERO
         };
-        let mut speed = if sprint { RUN_SPEED } else { WALK_SPEED };
+        // A full heart makes for a livelier deer: half again as fast; an empty one, half as.
+        let pace = 0.5 + heart.as_ref().map_or(0.5, |h| h.0);
+        anim.pace = pace;
+        let mut speed = if sprint { RUN_SPEED } else { WALK_SPEED } * pace;
         // Walking itself up to a berry: towards the spot, slowing as it arrives.
         if let Some((spot, _)) = d.approach {
             let to = spot - Vec2::new(d.pos.x, d.pos.z);
@@ -299,7 +321,7 @@ fn movement(
             0.0
         };
 
-        if !d.locked && keys.just_pressed(KeyCode::Space) && d.grounded {
+        if !d.locked && !chat.0 && keys.just_pressed(KeyCode::Space) && d.grounded {
             d.vel.y = JUMP_SPEED;
             d.grounded = false;
             d.action = Action::Airborne;

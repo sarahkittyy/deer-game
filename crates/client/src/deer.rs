@@ -18,6 +18,7 @@ pub const RUN_SPEED: f32 = 7.5;
 
 /// Clip indices in both glTF files (the clips without the `AnimalArmature|` prefix).
 mod clip {
+    pub const DEATH: usize = 2;
     pub const EATING: usize = 3;
     pub const GALLOP: usize = 4;
     pub const GALLOP_JUMP: usize = 5;
@@ -36,8 +37,12 @@ enum Clip {
     StandJump,
     Eat,
     HeadLow,
+    Death,
 }
-const CLIPS: [(Clip, usize); 7] = [
+/// Length of the death clip (seconds): knocked deer hold it at a chosen time.
+const DEATH_SECS: f32 = 0.833;
+const N_CLIPS: usize = 8;
+const CLIPS: [(Clip, usize); N_CLIPS] = [
     (Clip::Idle, clip::IDLE),
     (Clip::Walk, clip::WALK),
     (Clip::Gallop, clip::GALLOP),
@@ -45,12 +50,13 @@ const CLIPS: [(Clip, usize); 7] = [
     (Clip::StandJump, clip::JUMP_TO_IDLE),
     (Clip::Eat, clip::EATING),
     (Clip::HeadLow, clip::IDLE_HEADLOW),
+    (Clip::Death, clip::DEATH),
 ];
 
 struct ModelAssets {
     scene: Handle<WorldAsset>,
     graph: Handle<AnimationGraph>,
-    nodes: [AnimationNodeIndex; 7],
+    nodes: [AnimationNodeIndex; N_CLIPS],
 }
 
 #[derive(Resource)]
@@ -60,13 +66,31 @@ pub struct DeerAssets {
 }
 
 /// What drives a deer's animation. The player's controller or the network fills it in.
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Clone, Copy)]
 pub struct DeerAnim {
     pub speed: f32,
+    /// Walk and gallop speeds are scaled by this (see `Pose::pace`).
+    pub pace: f32,
     pub action: Action,
     /// Where the head looks, relative to the body: yaw left/right, pitch up/down (radians).
     pub head_yaw: f32,
     pub head_pitch: f32,
+    /// Knocked over: how far through the collapse to hold the legs and body, 0 (standing) to
+    /// 1 (lying on its side). Overrides everything else.
+    pub knock: Option<f32>,
+}
+
+impl Default for DeerAnim {
+    fn default() -> Self {
+        DeerAnim {
+            speed: 0.0,
+            pace: 1.0,
+            action: Action::None,
+            head_yaw: 0.0,
+            head_pitch: 0.0,
+            knock: None,
+        }
+    }
 }
 
 /// Where a deer's neck starts and where its mouth is, as drawn (render space, last frame), and
@@ -74,6 +98,11 @@ pub struct DeerAnim {
 #[derive(Component, Default, Clone, Copy)]
 pub struct Mouth {
     pub neck: Vec3,
+    /// The head bone (back of the skull).
+    pub head: Vec3,
+    /// The head bone in the deer's own space (unscaled, unrotated, relative to its root), for
+    /// things that follow the head without the lag of last frame's world position.
+    pub head_local: Vec3,
     pub mouth: Vec3,
     pub look: Vec2,
 }
@@ -94,8 +123,8 @@ pub struct Deer {
 #[derive(Component)]
 struct DeerRig {
     player: Entity,
-    nodes: [AnimationNodeIndex; 7],
-    weights: [f32; 7],
+    nodes: [AnimationNodeIndex; N_CLIPS],
+    weights: [f32; N_CLIPS],
     /// Bones that share the head turn: the three neck bones and the head, root-most first.
     neck: [Entity; 4],
     /// Ancestors of the first neck bone up to (not including) the deer root, root-most first.
@@ -279,7 +308,7 @@ fn on_model_ready(
     commands.entity(deer).insert(DeerRig {
         player: player_entity,
         nodes: model.nodes,
-        weights: [0.0; 7],
+        weights: [0.0; N_CLIPS],
         neck: [n1, n2, n3, head],
         neck_ancestors: ancestors(n1),
         last_action: Action::None,
@@ -314,9 +343,11 @@ fn blend(
 
         // Target weights: locomotion blends idle -> walk -> gallop by speed; actions override.
         let s = anim.speed;
-        let mut target = [0.0f32; 7];
-        let walk_t = (s / WALK_SPEED).clamp(0.0, 1.0);
-        let run_t = ((s - WALK_SPEED) / (RUN_SPEED * 0.6 - WALK_SPEED)).clamp(0.0, 1.0);
+        let pace = anim.pace.clamp(0.25, 2.0);
+        let (walk, run) = (WALK_SPEED * pace, RUN_SPEED * pace);
+        let mut target = [0.0f32; N_CLIPS];
+        let walk_t = (s / walk).clamp(0.0, 1.0);
+        let run_t = ((s - walk) / (run * 0.6 - walk)).clamp(0.0, 1.0);
         target[0] = 1.0 - walk_t;
         target[1] = walk_t * (1.0 - run_t);
         target[2] = walk_t * run_t;
@@ -335,7 +366,7 @@ fn blend(
             }
             // Eating and drinking keep the walk: the deer steps itself into place first. The
             // head is steered onto the berry or the water (`reach`) on top.
-            Action::Eating | Action::Drinking | Action::None => None,
+            Action::Eating | Action::Drinking | Action::None | Action::Knocked => None,
         };
         if let Some(c) = over {
             let i = CLIPS.iter().position(|(k, _)| *k == c).unwrap();
@@ -347,12 +378,25 @@ fn blend(
                 a.seek_to(if c == Clip::Jump { 0.25 } else { 0.0 });
             }
         }
+        // Knocked over: the death clip, held at the point of the collapse the body has reached
+        // (played backwards, it is the deer getting up).
+        let death = CLIPS.iter().position(|(k, _)| *k == Clip::Death).unwrap();
+        if let Some(a) = player.animation_mut(rig.nodes[death]) {
+            a.set_speed(0.0);
+            if let Some(f) = anim.knock {
+                a.seek_to(f.clamp(0.0, 0.999) * DEATH_SECS);
+            }
+        }
+        if anim.knock.is_some() {
+            target.fill(0.0);
+            target[death] = 1.0;
+        }
 
         // Idle stays on underneath everything: some clips (eating) leave bones like Neck3
         // unanimated, and a bone no active clip covers gets no pose at all.
         target[0] = target[0].max(0.02);
-        let rate = 1.0 - (-dt * 9.0).exp();
-        for i in 0..7 {
+        let rate = 1.0 - (-dt * if anim.knock.is_some() { 16.0 } else { 9.0 }).exp();
+        for i in 0..N_CLIPS {
             rig.weights[i] += (target[i] - rig.weights[i]) * rate;
             if let Some(a) = player.animation_mut(rig.nodes[i]) {
                 // Never exactly zero: Bevy blends by dividing by the running weight total, and
@@ -362,10 +406,10 @@ fn blend(
         }
         // Pace the feet to the ground speed.
         if let Some(a) = player.animation_mut(rig.nodes[1]) {
-            a.set_speed((s / WALK_CLIP_SPEED).clamp(0.4, 1.6));
+            a.set_speed((s / WALK_CLIP_SPEED).clamp(0.4 * pace.min(1.0), 1.6 * pace.max(1.0)));
         }
         if let Some(a) = player.animation_mut(rig.nodes[2]) {
-            a.set_speed((s / GALLOP_CLIP_SPEED).clamp(0.6, 1.3));
+            a.set_speed((s / GALLOP_CLIP_SPEED).clamp(0.6 * pace.min(1.0), 1.3 * pace.max(1.0)));
         }
     }
 }
@@ -382,6 +426,11 @@ fn turn_head(
     const SHARE: [f32; 4] = [0.34, 0.26, 0.2, 0.2];
     let rate = 1.0 - (-time.delta_secs() * 6.0).exp();
     for (anim, mut rig) in &mut rigs {
+        // A knocked deer's head goes where the fall takes it.
+        if anim.knock.is_some() {
+            rig.look = Vec2::ZERO;
+            continue;
+        }
         let target = Vec2::new(anim.head_yaw, anim.head_pitch);
         let look = rig.look + (target - rig.look) * rate;
         rig.look = look;
@@ -506,13 +555,18 @@ fn turn_in_deer_space(
 }
 
 /// Records where the neck and mouth ended up, once the bones have their final transforms.
-fn measure_mouth(mut deer: Query<(&DeerRig, &mut Mouth)>, globals: Query<&GlobalTransform>) {
-    for (rig, mut m) in &mut deer {
+fn measure_mouth(
+    mut deer: Query<(&DeerRig, &GlobalTransform, &mut Mouth)>,
+    globals: Query<&GlobalTransform>,
+) {
+    for (rig, root, mut m) in &mut deer {
         let (Ok(neck), Ok(head)) = (globals.get(rig.neck[0]), globals.get(rig.neck[3])) else {
             continue;
         };
         let (n, h) = (neck.translation(), head.translation());
         m.neck = n;
+        m.head = h;
+        m.head_local = root.rotation().inverse() * (h - root.translation());
         m.mouth = h + head.rotation() * Vec3::Y * MUZZLE_LENGTH;
         m.look = rig.look;
     }

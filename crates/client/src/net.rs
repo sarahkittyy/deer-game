@@ -4,7 +4,7 @@
 use crate::{AppState, deer::DeerAnim, player::LocalDeer};
 use bevy::prelude::*;
 use deer_shared::protocol::{
-    self, BushState, ClientMsg, PROTOCOL_VERSION, Pose, ServerMsg, TICK_HZ,
+    self, BushState, ClientMsg, PROTOCOL_VERSION, Pose, ServerMsg, TICK_HZ, WolfCall, WolfState,
 };
 use ewebsock::{WsEvent, WsMessage, WsReceiver, WsSender};
 use std::sync::Mutex;
@@ -60,10 +60,25 @@ pub enum NetEvent {
         slot: u16,
         state: BushState,
     },
+    Chat {
+        id: u32,
+        text: String,
+    },
     Ate {
         id: u32,
         slot: u16,
         berry: u8,
+    },
+    Wolves(Vec<WolfState>),
+    WolfCall {
+        wolf: u8,
+        call: WolfCall,
+    },
+    Pounce {
+        wolf: u8,
+        victim: u32,
+        from: [f32; 3],
+        dir: [f32; 2],
     },
     Disconnected,
 }
@@ -193,6 +208,20 @@ fn receive(
                     ServerMsg::Snapshot { poses } => NetEvent::Snapshot { poses },
                     ServerMsg::Bush { slot, state } => NetEvent::Bush { slot, state },
                     ServerMsg::Ate { id, slot, berry } => NetEvent::Ate { id, slot, berry },
+                    ServerMsg::Chat { id, text } => NetEvent::Chat { id, text },
+                    ServerMsg::Wolves(w) => NetEvent::Wolves(w),
+                    ServerMsg::WolfCall { wolf, call } => NetEvent::WolfCall { wolf, call },
+                    ServerMsg::Pounce {
+                        wolf,
+                        victim,
+                        from,
+                        dir,
+                    } => NetEvent::Pounce {
+                        wolf,
+                        victim,
+                        from,
+                        dir,
+                    },
                 };
                 events.write(ev);
             }
@@ -217,13 +246,25 @@ fn receive(
     }
 }
 
-fn send_pose(time: Res<Time>, mut net: ResMut<Net>, deer: Query<(&LocalDeer, &DeerAnim)>) {
+fn send_pose(
+    time: Res<Time>,
+    mut net: ResMut<Net>,
+    look: Res<crate::player::Look>,
+    deer: Query<(&LocalDeer, &DeerAnim, Option<&crate::knock::Knocked>)>,
+) {
     net.since_send += time.delta_secs();
     if net.since_send < 1.0 / TICK_HZ || !net.connected() {
         return;
     }
     net.since_send = 0.0;
-    if let Ok((d, anim)) = deer.single() {
-        net.send(&ClientMsg::Pose(d.pose(anim)));
+    if let Ok((d, anim, knocked)) = deer.single() {
+        let mut pose = d.pose(anim);
+        pose.look = look.yaw;
+        pose.tumble = knocked.map(|k| protocol::Tumble {
+            rot: k.rot.to_array(),
+            vel: d.vel.to_array(),
+            fall: k.fall,
+        });
+        net.send(&ClientMsg::Pose(pose));
     }
 }

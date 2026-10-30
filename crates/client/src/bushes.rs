@@ -50,14 +50,41 @@ pub struct Bush {
 pub struct Berry {
     pub slot: usize,
     pub index: u8,
+    /// Which of `BERRIES` grows on this bush.
+    pub kind: u8,
 }
 
-/// The berry mesh and its two looks.
+/// The berries a bush can grow (every berry on one bush is the same): their colour, and the
+/// colour they glow when pointed at.
+const BERRIES: [(Color, LinearRgba); 4] = [
+    // Raspberry
+    (
+        Color::srgb(0.55, 0.04, 0.10),
+        LinearRgba::rgb(9.0, 2.2, 1.6),
+    ),
+    // Blueberry
+    (
+        Color::srgb(0.12, 0.17, 0.46),
+        LinearRgba::rgb(2.4, 3.6, 9.0),
+    ),
+    // Blackberry
+    (
+        Color::srgb(0.16, 0.04, 0.20),
+        LinearRgba::rgb(6.0, 2.0, 8.0),
+    ),
+    // Cloudberry
+    (
+        Color::srgb(0.86, 0.46, 0.12),
+        LinearRgba::rgb(9.0, 5.0, 1.4),
+    ),
+];
+
+/// The berry mesh and each kind's two looks.
 #[derive(Resource, Clone)]
 pub struct BerryLook {
     pub mesh: Handle<Mesh>,
-    pub normal: Handle<StandardMaterial>,
-    pub glow: Handle<StandardMaterial>,
+    pub normal: Vec<Handle<StandardMaterial>>,
+    pub glow: Vec<Handle<StandardMaterial>>,
     offset: Transform,
 }
 
@@ -207,16 +234,22 @@ fn make_berry_look(
     let Mat::Standard(mat) = &part.material else {
         return;
     };
-    let mut normal = materials.get(mat).cloned().unwrap_or_default();
-    normal.base_color = Color::srgb(0.55, 0.04, 0.10);
-    normal.perceptual_roughness = 0.35;
-    normal.reflectance = 0.6;
-    let mut glow = normal.clone();
-    glow.emissive = LinearRgba::rgb(9.0, 2.2, 1.6);
+    let base = materials.get(mat).cloned().unwrap_or_default();
+    let (mut normal, mut glow) = (Vec::new(), Vec::new());
+    for (color, emissive) in BERRIES {
+        let mut n = base.clone();
+        n.base_color = color;
+        n.perceptual_roughness = 0.35;
+        n.reflectance = 0.6;
+        let mut g = n.clone();
+        g.emissive = emissive;
+        normal.push(materials.add(n));
+        glow.push(materials.add(g));
+    }
     commands.insert_resource(BerryLook {
         mesh: part.mesh.clone(),
-        normal: materials.add(normal),
-        glow: materials.add(glow),
+        normal,
+        glow,
         offset: part.transform,
     });
 }
@@ -311,6 +344,8 @@ fn sync(
             .id();
         prefabs.spawn(&mut commands, Model::Bush, root, Transform::default(), true);
         let mut taken = Vec::new();
+        // From the bush's shared random bits, so everyone sees the same berries.
+        let kind = ((spawn.kind >> 12) % BERRIES.len() as u64) as u8;
         for i in 0..spawn.berries.min(MAX_BERRIES) {
             let Some(at) = berry_spot(
                 &world.0,
@@ -328,9 +363,10 @@ fn sync(
                 Berry {
                     slot,
                     index: i as u8,
+                    kind,
                 },
                 Mesh3d(look.mesh.clone()),
-                MeshMaterial3d(look.normal.clone()),
+                MeshMaterial3d(look.normal[kind as usize].clone()),
                 Transform::from_translation(at)
                     .with_scale(look.offset.scale * s)
                     .with_rotation(look.offset.rotation),

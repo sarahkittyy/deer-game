@@ -17,10 +17,20 @@ pub enum Sfx {
     Step(Vec3),
     /// A step in shallow water.
     Splash(Vec3),
+    /// The deer sniffing the air: barely there.
+    Sniff(Vec3),
     Land(Vec3),
     Bird(Vec3),
     Frog(Vec3),
     Rustle(Vec3),
+    /// A wolf's paw; `true` at a gallop (louder).
+    WolfStep(Vec3, bool),
+    WolfBark(Vec3),
+    WolfGrowl(Vec3),
+    /// The pounce: a loud bark and a snarl.
+    WolfAttack(Vec3),
+    /// A body hitting something hard: the wolf's hit, a trunk, the ground after a long fall.
+    Thud(Vec3, f32),
 }
 
 #[derive(Resource)]
@@ -30,10 +40,16 @@ struct Sounds {
     drink: Vec<Handle<AudioSource>>,
     step: Vec<Handle<AudioSource>>,
     splash: Vec<Handle<AudioSource>>,
+    sniff: Vec<Handle<AudioSource>>,
     land: Handle<AudioSource>,
     bird: Vec<Handle<AudioSource>>,
     frog: Vec<Handle<AudioSource>>,
     rustle: Vec<Handle<AudioSource>>,
+    wolf_paw: Vec<Handle<AudioSource>>,
+    wolf_bark: Vec<Handle<AudioSource>>,
+    wolf_growl: Vec<Handle<AudioSource>>,
+    wolf_attack: Vec<Handle<AudioSource>>,
+    wolf_snarl: Vec<Handle<AudioSource>>,
 }
 
 /// The looping emitter that sits on the nearest lake shore.
@@ -67,10 +83,16 @@ fn setup(mut commands: Commands, assets: Res<AssetServer>) {
         drink: many("drink", 2),
         step: many("step", 6),
         splash: many("splash", 6),
+        sniff: many("sniff", 1),
         land: assets.load("audio/land.ogg"),
         bird: many("bird_chirp", 7),
         frog: many("frog", 5),
         rustle: many("rustle", 4),
+        wolf_paw: many("wolf_paw", 6),
+        wolf_bark: many("wolf_bark", 6),
+        wolf_growl: many("wolf_growl", 4),
+        wolf_attack: many("wolf_attack", 4),
+        wolf_snarl: many("wolf_snarl", 2),
     });
 
     let bed = |path: &str, vol: f32| {
@@ -130,6 +152,19 @@ fn pick(v: &[Handle<AudioSource>]) -> &Handle<AudioSource> {
 }
 
 fn play(ev: On<Sfx>, mut commands: Commands, sounds: Res<Sounds>) {
+    let mut spawn = |handle: &Handle<AudioSource>, vol: f32, at: Option<Vec3>, speed: f32| {
+        let settings = PlaybackSettings {
+            mode: PlaybackMode::Despawn,
+            volume: Volume::Linear(vol),
+            speed,
+            spatial: at.is_some(),
+            ..default()
+        };
+        let mut e = commands.spawn((AudioPlayer::new(handle.clone()), settings));
+        if let Some(p) = at {
+            e.insert(Transform::from_translation(p));
+        }
+    };
     let (handle, vol, at, speed) = match *ev {
         Sfx::Click => (&sounds.click, 0.5, None, 1.0),
         Sfx::Eat(p) => (
@@ -144,6 +179,12 @@ fn play(ev: On<Sfx>, mut commands: Commands, sounds: Res<Sounds>) {
             0.16,
             Some(p),
             rand::random_range(0.9..1.15),
+        ),
+        Sfx::Sniff(p) => (
+            pick(&sounds.sniff),
+            0.25,
+            Some(p),
+            rand::random_range(0.95..1.05),
         ),
         Sfx::Splash(p) => (
             pick(&sounds.splash),
@@ -165,16 +206,41 @@ fn play(ev: On<Sfx>, mut commands: Commands, sounds: Res<Sounds>) {
             rand::random_range(0.9..1.1),
         ),
         Sfx::Rustle(p) => (pick(&sounds.rustle), 0.3, Some(p), 1.0),
+        Sfx::WolfStep(p, gallop) => (
+            pick(&sounds.wolf_paw),
+            if gallop { 0.11 } else { 0.06 },
+            Some(p),
+            rand::random_range(0.85..1.1),
+        ),
+        // Wolves are kept under 1: louder, a close one clips and drowns the panning that says
+        // where it is. Barks still carry (falloff starts at 10 m).
+        Sfx::WolfBark(p) => (
+            pick(&sounds.wolf_bark),
+            0.9,
+            Some(p),
+            rand::random_range(0.88..1.0),
+        ),
+        Sfx::WolfGrowl(p) => (
+            pick(&sounds.wolf_growl),
+            0.6,
+            Some(p),
+            rand::random_range(0.9..1.05),
+        ),
+        Sfx::WolfAttack(p) => {
+            spawn(pick(&sounds.wolf_snarl), 0.6, Some(p), 1.0);
+            (
+                pick(&sounds.wolf_attack),
+                1.0,
+                Some(p),
+                rand::random_range(0.9..1.0),
+            )
+        }
+        Sfx::Thud(p, strength) => (
+            &sounds.land,
+            (0.3 + strength * 0.7).min(1.4),
+            Some(p),
+            rand::random_range(0.7..0.85),
+        ),
     };
-    let settings = PlaybackSettings {
-        mode: PlaybackMode::Despawn,
-        volume: Volume::Linear(vol),
-        speed,
-        spatial: at.is_some(),
-        ..default()
-    };
-    let mut e = commands.spawn((AudioPlayer::new(handle.clone()), settings));
-    if let Some(p) = at {
-        e.insert(Transform::from_translation(p));
-    }
+    spawn(handle, vol, at, speed);
 }

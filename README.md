@@ -4,14 +4,24 @@ A deer wandering a low-poly forest at dawn, alongside everyone else's deer. The 
 512 m square that wraps at the edges; every client and the server generate the same terrain,
 lakes, trees and bushes from one seed, so other deer never clip into terrain. The server picks
 a random seed when it starts (`DEER_SEED=n` fixes it) and sends it to each client as it joins. Other players are ghosts with a name tag; the only thing shared besides
-poses is which berries are still on the bushes.
+poses is which berries are still on the bushes, and the wolves.
+
+A few wolves roam the whole forest. They are the server's: it decides where they go and
+who they go after, and clients draw them in the present (carried on with their last velocity,
+easing onto each new snapshot), not a snapshot behind like other deer. A wolf that spots a deer barks,
+gives it a second to stop and look round, and stares it down, barking; stared at for 10 s, or looked away from, it walks slowly up. Turn and
+run and it chases, a little faster than you can gallop. Within about a deer's length it pounces,
+and your deer is knocked flying (`knock.rs`): away from the wolf, high or far but never up into
+the leaves, bouncing off trunks at any height, then lying a moment and getting up, with the heart
+nearly emptied. Other players see the tumble too. The wolf then leaves deer alone for 10 s.
 
 ## Layout
 
 - `crates/shared`: the seeded world (tileable noise, heightfield, lakes, tree/boulder/bush
   placement) and the wire protocol (bincode over WebSocket).
 - `crates/server`: axum WebSocket server at `/ws`. Relays poses as 15 Hz snapshots and owns the
-  bushes: validates eats, broadcasts them, and regrows a bare bush after 25 s.
+  bushes: validates eats, broadcasts them, and regrows a bare bush after 25 s. Runs the wolves
+  (`wolf.rs`).
 - `crates/client`: the Bevy 0.20 game. Native for quick iteration, WebGPU for the web.
 
 ## Running locally
@@ -24,11 +34,16 @@ cargo run -p deer-server
 cargo run -p deer-client
 ```
 
+`DEER_WOLVES=n` sets how many wolves there are (5), and `DEER_WOLF_TEST=m` puts one `m` metres in
+front of each deer as it arrives (behind it, if negative), to try them out.
+
 Run the client twice to see a ghost. Without a server the game still plays, alone, and keeps
 trying to connect. `DEER_SERVER=ws://host:3560/ws` points a native client elsewhere.
 
 Controls: WASD to walk, hold Left Shift to gallop (forward only), Space to jump, mouse to look,
-click a glowing berry to eat it or the water to drink. The deer can wade into shallow water,
+click a glowing berry to eat it or the water to drink, T to say something (Enter sends, Esc
+cancels). The heart in the corner fills with berries and slowly empties; a fuller heart makes a
+faster deer. Stand still for a moment and the deer sniffs out the nearest deer out of sight. The deer can wade into shallow water,
 up to its belly (about 70 cm). Click captures the mouse; Esc frees it.
 
 ### Web
@@ -69,6 +84,8 @@ and run `build-web.sh` with `target/tools/bin` on `PATH`.
 | `DEER_CLICKS=t1,t2`, `DEER_PITCH=rad`, `DEER_LOOK_YAW=rad` | Scripted left clicks (as if the mouse were captured, without taking it) and view angles (the angles apply only with `DEER_CLICKS`) |
 | `DEER_LOOK_AT=t,yaw,pitch` | Swing the view to these angles at `t` seconds (to see an action from the side) |
 | `DEER_HOLD=w` / `DEER_HOLD=run` | Hold W (and Shift) from 3 s on |
+| `DEER_SAY=t,line` | Say `line` in chat at `t` seconds |
+| `DEER_KNOCK=t` | Knock the player's deer flying at `t` seconds, as a wolf would (to look at the ragdoll without waiting for one) |
 | `DEER_COLLIDERS=1` | Draw the trunk collision circles near the player, and where each deer's mouth is |
 | `DEER_FPS=1` | Log the frame rate |
 | `DEER_PROFILE=1` | Hidden window, uncapped; print the average frame time from 10 s to 16 s, quit (use with `DEER_SHOT`) |
