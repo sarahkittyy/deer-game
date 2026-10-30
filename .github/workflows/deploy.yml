@@ -1,0 +1,115 @@
+name: Deploy
+
+# Every push to main rebuilds the web game and the server and publishes both to
+# deer.fluffycat.gay. The heavy builds run on GitHub's machines; the job on sarahvps (a
+# self-hosted runner labelled sarah-vps) only copies the results in and restarts the server.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  web:
+    name: web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web-v1
+          cache-on-failure: false
+
+      - name: wasm-bindgen version from Cargo.lock
+        id: wb
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')" >> "$GITHUB_OUTPUT"
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wb.outputs.version }}
+
+      - name: Install binaryen (wasm-opt) and brotli
+        run: |
+          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_121/binaryen-version_121-x86_64-linux.tar.gz | tar xz
+          echo "$PWD/binaryen-version_121/bin" >> "$GITHUB_PATH"
+          sudo apt-get update && sudo apt-get install -y brotli
+
+      - name: Build
+        run: bash build-web.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: dist/
+          if-no-files-found: error
+
+  server:
+    name: server build
+    runs-on: ubuntu-latest
+    # built against Debian 12's glibc, the same as sarahvps
+    container: rust:1-bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: server-v1
+          cache-on-failure: false
+
+      - name: Build
+        run: cargo build --release --locked -p deer-server
+
+      - name: Test the shared world
+        run: cargo test --release --locked -p deer-shared
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server
+          path: target/release/deer-server
+          if-no-files-found: error
+
+  deploy:
+    name: publish (sarahvps)
+    needs: [web, server]
+    runs-on: [self-hosted, sarah-vps]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: incoming
+
+      - name: Publish the web build
+        run: rsync -a --delete incoming/web/ /srv/deer/dist/
+
+      - name: Install and restart the server
+        run: |
+          install -m 755 incoming/server/deer-server /srv/deer/deer-server.new
+          mv -f /srv/deer/deer-server.new /srv/deer/deer-server
+          sudo supervisorctl restart deer-server
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS https://deer.fluffycat.gay/health >/dev/null; then
+              echo "deer-server is up"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "deer-server did not come up:"
+          tail -n 40 /var/log/supervisor/deer-server-error.log
+          exit 1
+
+      - name: Clean up
+        if: always()
+        run: rm -rf incoming

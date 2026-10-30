@@ -1,0 +1,15 @@
+[package]
+name = "deer-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+deer-shared = { path = "../shared" }
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["ws"] }
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dotenvy = "0.15"
+rand = "0.9"
+tower-http = { version = "0.6", features = ["fs"] }

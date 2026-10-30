@@ -1,0 +1,12 @@
+Stylized Nature MegaKit (Standard / free edition, 68 of 116 models) by Quaternius
+Source page:   https://quaternius.com/packs/stylizednaturemegakit.html
+               https://quaternius.itch.io/stylized-nature-megakit
+Download:      itch.io pay-what-you-want "No thanks, just take me to the downloads" (no login),
+               upload id 11055123 "Stylized Nature MegaKit[Standard].zip" (99 MB)
+               (CDN path https://itchio-mirror.cb031a832f44726753d6267436f3b414.r2.cloudflarestorage.com/upload2/game/2862214/11055123, signed URL)
+Licence:       CC0 1.0 Universal (Public Domain Dedication) https://creativecommons.org/publicdomain/zero/1.0/
+               (see src/License_Standard.txt)
+Attribution:   Not required. Optional credit: "Stylized Nature MegaKit by Quaternius (quaternius.com), CC0"
+Local notes:   src/ = unzipped original. glb/ = lossless GLB packing of src/glTF/*.gltf (textures embedded per file).
+               glb/Bush_Common_Green.glb = Bush_Common with its (red) Leaves_TwistedTree_C.png swapped for Leaves_NormalTree_C.png.
+Downloaded 2026-10-29.

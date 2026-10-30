@@ -1,0 +1,9 @@
+Butterfly (animated) by Čestmír Dammer (CDmir), made for www.kelgar.org
+Source page:   https://opengameart.org/content/butterfly-animated
+Download:      https://opengameart.org/sites/default/files/Butterfly.zip
+Licence:       CC0 (see src/license.txt; OpenGameArt page lists CC0)
+Attribution:   Not required. Optional credit: "Butterfly by Čestmír Dammer (CDmir), kelgar.org, CC0"
+               (texture derived from photo documentation by Rick Hoppmann, per src/license.txt)
+Local notes:   glb/butterfly.glb = .blend opened with scripts disabled and exported by headless Blender 5.1, butterfly-skin.png
+               assigned (alpha-clip), uniform scale 0.012 (~9 cm wingspan).
+Downloaded 2026-10-29.

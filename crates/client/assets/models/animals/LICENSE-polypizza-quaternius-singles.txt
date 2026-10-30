@@ -1,0 +1,20 @@
+Single models from Poly Pizza (https://poly.pizza), all by Quaternius, all CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
+Attribution:   Not required. Optional credit: "<model> by Quaternius via Poly Pizza, CC0"
+
+RECOMMENDED
+glb/Frog_Quaternius.glb  "Frog" https://poly.pizza/m/9Z2V8fpazF
+                         download https://static.poly.pizza/08416495-b056-4ed7-b23b-5a10e82277a0.glb
+                         (re-exported with headless Blender, uniform root scale 0.04 -> ~14 cm long frog)
+
+CANDIDATES (candidates/, original files, not recommended unless noted)
+Fox          https://poly.pizza/m/Bc97C66HKi  https://static.poly.pizza/e18e86df-1692-48d8-ac6e-1e25ab4ad574.glb  (Ultimate Animated Animals style)
+Bird         https://poly.pizza/m/gYYC0gYMnw  https://static.poly.pizza/bc6de37a-fdc5-4ef2-85c6-4a2e7b5db9d5.glb  (static, cartoon)
+BushBerries  https://poly.pizza/m/TSbIxkDtxF  https://static.poly.pizza/30a7c72d-c014-40c4-8e1d-aaa949ebc465.glb  (= Ultimate Nature BushBerries_2)
+Lilypad      https://poly.pizza/m/TI6ukUlsLh  https://static.poly.pizza/ae432cca-6422-42ef-a982-b74bd0fc99b2.glb  (= Ultimate Nature Lilypad)
+Bunny        https://poly.pizza/m/irZjWFARyl  https://static.poly.pizza/084b5ebe-c3eb-4e64-9b17-06e2d1e3da5d.glb  (cartoon monster character)
+Rabbit       https://poly.pizza/m/mKev485XTR  https://static.poly.pizza/0f6aa24f-b37e-4b75-aeec-5e7d71319f7d.glb  (cartoon character in clothes)
+Frog_B       https://poly.pizza/m/37wofOCOzG  https://static.poly.pizza/9018566d-c4e9-4f20-9c99-964622a6e674.glb  (cartoon character)
+Pigeon       https://poly.pizza/m/9NGlBTpDEr  https://static.poly.pizza/2ad33f9e-e0d5-4a11-821b-7aafe8d13dd3.glb  (blob monster)
+Birb         https://poly.pizza/m/gZ2ExU9OAB  https://static.poly.pizza/05dac745-bdd0-4169-9e64-f497ca21f69a.glb  (blob monster)
+Hedgehog     https://poly.pizza/m/Uu0PXwt2nU  https://static.poly.pizza/ff140817-6bba-4af6-b6c8-c3c80895f24e.glb  (enemy character)
+Downloaded 2026-10-29.

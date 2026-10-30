@@ -1,0 +1,16 @@
+Ultimate Stylized Nature Pack by Quaternius (tree models only)
+Source page:   https://quaternius.com/packs/ultimatestylizednature.html
+               (official download is Google Drive folder https://drive.google.com/drive/folders/1IV3bXHzkNvuNWFHPi4KPx-G4ghuxIuT-
+                which returned "Quota exceeded" on 2026-10-29, so the identical models were taken from Quaternius' own Poly Pizza uploads)
+Downloads (Poly Pizza, CC0, author Quaternius, no login):
+  src/Trees_etFGNvsiFv.glb        "Trees"        https://poly.pizza/m/etFGNvsiFv  https://static.poly.pizza/53a83125-e16a-4024-b8f6-1e72679c7ddf.glb  (NormalTree_1..5)
+  src/Maple_Trees_iGFtQd0PJO.glb  "Maple Trees"  https://poly.pizza/m/iGFtQd0PJO  https://static.poly.pizza/cdfcf39f-f8c7-44a6-bb3f-82afe42fc141.glb  (MapleTree_1..5)
+  src/Pine_Trees_w8ZaiYjK8C.glb   "Pine Trees"   https://poly.pizza/m/w8ZaiYjK8C  https://static.poly.pizza/42a2a958-040d-4ce3-bae5-2332c1282cb5.glb  (PineTree_1..5)
+  src/Birch_Trees_R7qMWzb7nk.glb  "Birch Trees"  https://poly.pizza/m/R7qMWzb7nk  https://static.poly.pizza/457b2397-4bfb-41c4-862d-82d1592b2a5f.glb  (BirchTree_1..5)
+Licence:       CC0 1.0 Universal https://creativecommons.org/publicdomain/zero/1.0/
+Attribution:   Not required. Optional credit: "Ultimate Stylized Nature by Quaternius (quaternius.com), CC0"
+Local notes:   glb/ = each bundle split into one GLB per tree (trunk base at origin, real scale kept), leaves alphaMode MASK +
+               double sided, metallic 0 / roughness 1 (poly.pizza files had metallic 0.4). Original textures embedded.
+               glb_megakit_textures/*_MK.glb = NormalTree_* and MapleTree_* with their textures swapped for the Stylized Nature
+               MegaKit's Leaves_NormalTree_C.png, Bark_NormalTree.png, Bark_NormalTree_Normal.png (also Quaternius, CC0).
+Downloaded 2026-10-29.

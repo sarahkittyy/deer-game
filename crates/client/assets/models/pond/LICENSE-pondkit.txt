@@ -1,0 +1,9 @@
+Free Lowpoly Pond Kit by Asset Quest (www.assetquest.dev)
+Source page:   https://opengameart.org/content/free-lowpoly-pond-kit
+Download:      https://opengameart.org/sites/default/files/free_pond_kit_assetquest.zip
+Licence:       CC0 1.0 Universal http://creativecommons.org/publicdomain/zero/1.0/ (see src/Pond_Kit_License.txt)
+Attribution:   Not required. Author asks (optional): credit 'Asset Quest' or 'www.assetquest.dev'
+Local notes:   glb/ = FBX converted with headless Blender 5.1; plants get Textures/Pond_Plants_Atlas_2K.tga (alpha-clip, double sided),
+               props/animals get Textures/Pond_Props_BaseColor.png (the FBX texture paths pointed at the author's machine).
+               Tubs and clay pot not converted.
+Downloaded 2026-10-29.

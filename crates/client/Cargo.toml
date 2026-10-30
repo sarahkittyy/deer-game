@@ -1,0 +1,25 @@
+[package]
+name = "deer-client"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+webgl2 = ["bevy/webgl2"]
+webgpu = ["bevy/webgpu"]
+
+[dependencies]
+deer-shared = { path = "../shared" }
+bevy = { version = "0.20.1", features = ["debug"] }
+ewebsock = "0.8"
+rand = "0.9"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window", "Location", "Storage", "Document", "Element"] }
+wasm-bindgen = "0.2"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+console_error_panic_hook = "0.1"
+
+[lints.clippy]
+# Bevy systems take their resources and queries as arguments.
+too_many_arguments = "allow"

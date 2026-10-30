@@ -1,0 +1,9 @@
+Rabbit (rigged, animated, textured) by Čestmír Dammer (CDmir), made for www.kelgar.org
+Source page:   https://opengameart.org/content/rabbit-0
+Download:      https://opengameart.org/sites/default/files/rabbit-FBX.7z
+Licence:       CC0 - Public Domain (see src/License.txt; OpenGameArt page lists CC0)
+Attribution:   Not required. Optional credit: "Rabbit by Čestmír Dammer (CDmir), kelgar.org, CC0"
+               (src/License.txt also notes: "Idea by Rick Hoppmann & Keppu")
+Local notes:   glb/rabbit.glb = FBX converted with headless Blender 5.1, wrapped in a "Root" node scaled 0.025
+               (~0.3-0.4 m tall). Fur card material "Fur" set to alpha-clip.
+Downloaded 2026-10-29.

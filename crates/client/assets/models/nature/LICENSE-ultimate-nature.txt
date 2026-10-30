@@ -1,0 +1,11 @@
+Ultimate Nature Pack (150 low-poly nature models) by Quaternius
+Source page:   https://quaternius.com/packs/ultimatenature.html
+               https://quaternius.itch.io/150-lowpoly-nature-models
+Download:      itch.io free download (no login), upload id 1588309 "Ultimate Nature Pack by Quaternius.zip" (23 MB)
+               (the Google Drive mirror on quaternius.com returned "Quota exceeded")
+Licence:       CC0 1.0 Universal https://creativecommons.org/publicdomain/zero/1.0/ (see src/License.txt)
+Attribution:   Not required. Optional credit: "Ultimate Nature Pack by Quaternius, CC0"
+Local notes:   glb/ = FBX converted with headless Blender 5.1 (material Alpha forced to 1: these FBX files import with alpha 0).
+               Snow/Autumn-less forest subset converted (no Cactus/Palm/Corn/Wheat/Snow). Berry.glb, BushBerries_1_Split.glb,
+               BushBerries_1_NoBerries.glb, BushBerries_1_berry_points.json are derived from FBX/BushBerries_1.fbx.
+Downloaded 2026-10-29.
