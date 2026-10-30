@@ -12,9 +12,13 @@ use bevy::{
         Atmosphere, AtmosphereEnvironmentMapLight, CascadeShadowConfigBuilder, EnvironmentMapLight,
         SunDisk, atmosphere::ScatteringMedium, light_consts::lux,
     },
+    asset::RenderAssetUsages,
     pbr::{AtmosphereSettings, ScreenSpaceReflections},
     post_process::bloom::Bloom,
     prelude::*,
+    render::render_resource::{
+        Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
+    },
 };
 
 /// The one 3D camera; `camera.rs` moves it.
@@ -28,25 +32,20 @@ const SUN_ELEVATION: f32 = 50.0;
 const SUN_AZIMUTH: f32 = 70.0;
 
 /// The WebGL2 build has no compute shaders (so no physical atmosphere or the light it gives),
-/// no screen-space reflections and no TAA: a plain sky colour and ambient light stand in.
+/// no screen-space reflections and no TAA: a plain sky colour and a made-up sky light stand in.
 /// `DEER_LITE=1` uses the same renderer natively, to look at it without a browser.
 pub fn lite() -> bool {
     cfg!(feature = "webgl2") || std::env::var("DEER_LITE").is_ok()
 }
 
 pub fn plugin(app: &mut App) {
-    if lite() {
-        app.insert_resource(GlobalAmbientLight {
-            color: Color::srgb(0.72, 0.8, 0.95),
-            brightness: 2600.0,
-            ..default()
-        })
-        .insert_resource(ClearColor(Color::srgb(0.62, 0.72, 0.86)));
-    } else {
-        app.insert_resource(GlobalAmbientLight::NONE)
-            .insert_resource(ClearColor(Color::BLACK));
-    }
-    app.add_systems(Startup, setup)
+    app.insert_resource(GlobalAmbientLight::NONE)
+        .insert_resource(ClearColor(if lite() {
+            Color::srgb(0.62, 0.72, 0.86)
+        } else {
+            Color::BLACK
+        }))
+        .add_systems(Startup, setup)
         .add_systems(Update, freeze_environment_light);
 }
 
@@ -56,9 +55,14 @@ pub fn sun_direction() -> Vec3 {
     Vec3::new(e.cos() * a.cos(), e.sin(), e.cos() * a.sin())
 }
 
-fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
+fn setup(
+    mut commands: Commands,
+    mut media: ResMut<Assets<ScatteringMedium>>,
+    mut images: ResMut<Assets<Image>>,
+) {
     commands.insert_resource(bevy::light::DirectionalLightShadowMap {
-        size: crate::debug::shadow_size().unwrap_or(1024),
+        // WebGL2's single cascade spreads over the whole 50 m, so it gets the two cascades' texels.
+        size: crate::debug::shadow_size().unwrap_or(if lite() { 2048 } else { 1024 }),
     });
     let lite = lite();
     if !lite && !crate::debug::off("atmo") {
@@ -85,7 +89,13 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             {
                 // Two cascades at 1024 px: shadows are mostly overlapping alpha-tested leaf cards, so their
                 // cost is fill rate, and this halves the frame time compared to 3 x 2048 px.
-                let c = crate::debug::cascades().unwrap_or((2, 14.0, 50.0));
+                // Bevy on WebGL2 keeps only the first cascade and drops the rest, so there the one
+                // cascade has to reach all the way, or shadows stop at its far edge.
+                let c = crate::debug::cascades().unwrap_or(if lite {
+                    (1, 50.0, 50.0)
+                } else {
+                    (2, 14.0, 50.0)
+                });
                 CascadeShadowConfigBuilder {
                     num_cascades: c.0,
                     first_cascade_far_bound: c.1,
@@ -145,6 +155,16 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             });
         }
     }
+    if lite {
+        let sky = images.add(lite_sky_light());
+        cam.insert(EnvironmentMapLight {
+            diffuse_map: sky.clone(),
+            specular_map: sky,
+            intensity: 2600.0,
+            rotation: Quat::IDENTITY,
+            affects_lightmapped_mesh_diffuse: true,
+        });
+    }
     if !off("bloom") {
         cam.insert(Bloom {
             max_mip_dimension: crate::debug::knob("DEER_BLOOM_MIP").unwrap_or(512.0) as u32,
@@ -180,6 +200,60 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             ),
         });
     }
+}
+
+/// WebGL2's stand-in for the atmosphere's environment map: blue from above, dark earth from below
+/// and a warm side towards the sun, so that things in the shade still show their shape. It is so
+/// smooth that one small image does for both diffuse and specular.
+fn lite_sky_light() -> Image {
+    const SIZE: u32 = 16;
+    let sky = Vec3::new(0.86, 0.94, 1.0);
+    let earth = Vec3::new(0.2, 0.17, 0.12);
+    let warm = Vec3::new(0.55, 0.4, 0.22);
+    let sun = sun_direction();
+    // Cubemap faces in +X, -X, +Y, -Y, +Z, -Z order: which way each looks, given the texel's
+    // position (u, v) across it.
+    let faces: [fn(f32, f32) -> Vec3; 6] = [
+        |u, v| Vec3::new(1.0, -v, -u),
+        |u, v| Vec3::new(-1.0, -v, u),
+        |u, v| Vec3::new(u, 1.0, v),
+        |u, v| Vec3::new(u, -1.0, -v),
+        |u, v| Vec3::new(u, -v, 1.0),
+        |u, v| Vec3::new(-u, -v, -1.0),
+    ];
+    let mut data = Vec::with_capacity((SIZE * SIZE * 6 * 4) as usize);
+    for face in faces {
+        for y in 0..SIZE {
+            for x in 0..SIZE {
+                let at = |i: u32| (i as f32 + 0.5) / SIZE as f32 * 2.0 - 1.0;
+                let mut dir = face(at(x), at(y)).normalize();
+                // Bevy looks up its cubemaps with z flipped.
+                dir.z = -dir.z;
+                let up = (dir.y * 0.5 + 0.5).clamp(0.0, 1.0);
+                let toward_sun = dir.dot(sun).max(0.0);
+                let c = earth.lerp(sky, up * up * (3.0 - 2.0 * up))
+                    + warm * toward_sun * toward_sun;
+                let c = LinearRgba::rgb(c.x.min(1.0), c.y.min(1.0), c.z.min(1.0));
+                data.extend_from_slice(&Color::from(c).to_srgba().to_u8_array());
+            }
+        }
+    }
+    let mut image = Image::new(
+        Extent3d {
+            width: SIZE,
+            height: SIZE,
+            depth_or_array_layers: 6,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.texture_view_descriptor = Some(TextureViewDescriptor {
+        dimension: Some(TextureViewDimension::Cube),
+        ..default()
+    });
+    image
 }
 
 /// The sky never changes, but Bevy re-renders and re-filters the atmosphere's environment map

@@ -115,7 +115,8 @@ What keeps it fast (measured with `DEER_PROFILE`, see `crates/client/src/debug.r
 - **Streaming**: ground cover and berry bushes only exist near the player; small things also
   have distance cut-offs.
 - **WebGL2** spends more CPU per frame than WebGPU, so its fog closes in sooner, its far plane
-  is nearer and its ground cover stops at 45 m rather than 70 m.
+  is nearer and its ground cover stops at 45 m rather than 70 m. Bevy allows it only one shadow
+  cascade, so that one is 2048 px and covers the whole 50 m.
 
 ## Deploying
 
