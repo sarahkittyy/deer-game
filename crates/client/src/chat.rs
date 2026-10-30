@@ -45,6 +45,11 @@ const FOLLOW: f32 = 4.0;
 #[derive(Resource, Default)]
 pub struct ChatOpen(pub bool);
 
+/// Closes the chat box as Esc would. The browser keeps Esc to itself while it holds the pointer
+/// lock: the game only sees the lock go (`web.rs`).
+#[derive(Resource, Default)]
+pub struct ChatCancel(pub bool);
+
 #[derive(Component)]
 struct ChatBox;
 
@@ -70,6 +75,7 @@ struct Line {
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<ChatOpen>()
+        .init_resource::<ChatCancel>()
         .add_systems(
             Update,
             (type_line, debug_say, heard, place_bubbles)
@@ -93,6 +99,7 @@ fn type_line(
     time: Res<Time>,
     font: Res<UiFont>,
     mut open: ResMut<ChatOpen>,
+    mut cancel: ResMut<ChatCancel>,
     mut focus: ResMut<InputFocus>,
     mut net: ResMut<Net>,
     boxes: Query<Entity, With<ChatBox>>,
@@ -101,6 +108,7 @@ fn type_line(
     stacks: Query<(Entity, &Stack)>,
     children: Query<&Children>,
 ) {
+    let cancelled = std::mem::take(&mut cancel.0);
     if !open.0 {
         if keys.just_pressed(KeyCode::KeyT) {
             let input = spawn_box(&mut commands, &font);
@@ -110,7 +118,7 @@ fn type_line(
         return;
     }
     let send = keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter);
-    if !send && !keys.just_pressed(KeyCode::Escape) {
+    if !send && !cancelled && !keys.just_pressed(KeyCode::Escape) {
         return;
     }
     if send
