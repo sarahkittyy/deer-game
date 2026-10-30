@@ -111,6 +111,8 @@ struct DeerRig {
     feet: [[(Entity, Vec<Entity>); 2]; 2],
     /// How far into the drinking crouch, 0 to 1.
     crouch: f32,
+    /// The jump clip picked at take-off, kept for the whole jump.
+    air_clip: Clip,
 }
 
 pub fn plugin(app: &mut App) {
@@ -288,6 +290,7 @@ fn on_model_ready(
             (leg_r, ancestors(leg_r)),
         ],
         crouch: 0.0,
+        air_clip: Clip::StandJump,
         feet: [
             [(end_l, ancestors(end_l)), (foot_l, ancestors(foot_l))],
             [(end_r, ancestors(end_r)), (foot_r, ancestors(foot_r))],
@@ -318,11 +321,18 @@ fn blend(
         target[1] = walk_t * (1.0 - run_t);
         target[2] = walk_t * run_t;
         let over = match anim.action {
-            Action::Airborne => Some(if s > WALK_SPEED {
-                Clip::Jump
-            } else {
-                Clip::StandJump
-            }),
+            // Running or standing jump, decided at take-off: picking it from the speed every
+            // frame would swap clips mid-air as the deer slows.
+            Action::Airborne => {
+                if started {
+                    rig.air_clip = if s > WALK_SPEED {
+                        Clip::Jump
+                    } else {
+                        Clip::StandJump
+                    };
+                }
+                Some(rig.air_clip)
+            }
             // Eating and drinking keep the walk: the deer steps itself into place first. The
             // head is steered onto the berry or the water (`reach`) on top.
             Action::Eating | Action::Drinking | Action::None => None,

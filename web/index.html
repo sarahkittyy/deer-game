@@ -19,7 +19,7 @@
     #loading .title span:nth-child(4n+2) { color: #d99e66; }
     #loading .title span:nth-child(4n+3) { color: #6b3d24; }
     #loading .title span:nth-child(4n+4) { color: #eddec2; }
-    #loading .bar { width: min(420px, 80vw); height: 14px; border: 3px solid #eddec2; position: relative; }
+    #loading .bar { width: min(420px, 80vw); height: 14px; border: 3px solid #eddec2; position: relative; overflow: hidden; }
     #loading .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #d99e66; transition: width .15s; }
     #loading .bar.indeterminate .fill { width: 25%; animation: slide 1.1s ease-in-out infinite alternate; }
     @keyframes slide { from { left: 0; } to { left: 75%; } }
@@ -71,15 +71,23 @@
       el("loading-title").innerHTML = [..."deer game"].map((c) => `<span>${c === " " ? "&nbsp;" : c}</span>`).join("");
       const root = el("loading"), bar = el("loading-bar"), fill = el("loading-fill"), message = el("loading-message");
       const CONTROL_FLOW = "Using exceptions for control flow";
-      let finished = false, failed = false;
+      let finished = false, failed = false, shown = 0, creep = null;
       const progress = (fraction) => {
         if (finished || failed) return;
         bar.classList.remove("indeterminate");
-        fill.style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
+        shown = Math.max(shown, Math.max(0, Math.min(1, fraction)));
+        fill.style.width = `${shown * 100}%`;
+      };
+      // After the download the game still builds the forest, which reports no progress: the bar
+      // keeps creeping towards the end (never back, never past it) until the game is ready.
+      const creepOn = () => {
+        if (creep) return;
+        creep = setInterval(() => progress(shown + (0.97 - shown) * 0.04), 200);
       };
       const fail = (msg) => {
         if (finished || failed) return;
         failed = true;
+        clearInterval(creep);
         bar.style.display = "none";
         message.textContent = `${msg}`.slice(0, 400);
         console.error("deer game failed to start:", msg);
@@ -94,7 +102,7 @@
         const body = new ReadableStream({
           async pull(controller) {
             const { done, value } = await reader.read();
-            if (done) { progress(0.8); bar.classList.add("indeterminate"); controller.close(); return; }
+            if (done) { progress(0.8); creepOn(); controller.close(); return; }
             received += value.byteLength;
             if (expected) progress(0.8 * Math.min(1, received / expected));
             controller.enqueue(value);
@@ -106,7 +114,9 @@
       // Called by the game (crates/client/src/web.rs) once the forest is in place.
       window.deerReady = () => {
         if (finished || failed) return;
+        progress(1);
         finished = true;
+        clearInterval(creep);
         root.classList.add("done");
         setTimeout(() => root.remove(), 900);
       };

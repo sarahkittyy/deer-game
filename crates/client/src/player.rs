@@ -231,6 +231,10 @@ fn movement(
         d.action_left -= dt;
         if d.action == Action::Drinking && (moving || d.action_left <= 0.0) {
             d.action = Action::None;
+        }
+        // Whatever ended a drink (walking off, time, a jump), its pull on the body goes with it.
+        // A bite keeps the keys locked until it lets go itself.
+        if d.action != Action::Drinking && !d.locked {
             d.reach = None;
             d.face = None;
             d.approach = None;

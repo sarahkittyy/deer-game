@@ -11,7 +11,7 @@ use crate::{
     wrap::Focus,
 };
 use bevy::{
-    input_focus::{AutoFocus, InputFocus},
+    input_focus::{AutoFocus, FocusCause, InputFocus},
     picking::events::{PointerClick, PointerOut, PointerOver},
     prelude::*,
     text::{EditableText, TextCursorStyle},
@@ -115,6 +115,7 @@ pub fn plugin(app: &mut App) {
             (
                 orbit_camera,
                 placeholder,
+                keep_name_focus.run_if(not(resource_exists::<Joining>)),
                 switch_visual,
                 keyboard_play,
                 join.run_if(resource_exists::<Joining>),
@@ -398,6 +399,16 @@ fn placeholder(
     } else {
         Visibility::Hidden
     };
+}
+
+/// The name box is the only thing to type into, so it keeps the keyboard. (In a browser the
+/// focus it gets on spawn is lost while the page is still taking focus.)
+fn keep_name_focus(mut focus: ResMut<InputFocus>, input: Query<Entity, With<NameInput>>) {
+    if let Ok(e) = input.single()
+        && focus.get() != Some(e)
+    {
+        focus.set(e, FocusCause::Navigated);
+    }
 }
 
 fn switch_visual(choice: Res<Choice>, mut knob: Query<&mut Node, With<SwitchKnob>>) {
