@@ -312,7 +312,10 @@ fn movement(
         let heading = Quat::from_rotation_y(d.yaw) * Vec3::NEG_Z;
         for axis in [Vec3::X, Vec3::Z] {
             let candidate = p + step * axis;
-            if walkable(w, candidate, heading) {
+            // Past the wall already (turning on the spot can swing the nose over deep water):
+            // any step that is no deeper is allowed, so the deer can always walk back out.
+            let over = too_deep_by(w, candidate, heading);
+            if over <= 0.0 || over < too_deep_by(w, p, heading) {
                 p = candidate;
             } else if axis == Vec3::X {
                 d.vel.x = 0.0;
@@ -391,10 +394,12 @@ fn movement(
     }
 }
 
-/// Whether the deer may stand at `p`: shallow enough to wade under its body and its nose.
-fn walkable(w: &World, p: Vec3, heading: Vec3) -> bool {
+/// How much deeper than the deer can wade the water is under its body or its nose (metres;
+/// zero or less where it can stand).
+fn too_deep_by(w: &World, p: Vec3, heading: Vec3) -> f32 {
     let nose = p + heading * NOSE;
-    !w.too_deep(p.x, p.z) && !w.too_deep(nose.x, nose.z)
+    let over = |x: f32, z: f32| WATER_LEVEL - WADE_DEPTH - w.height(x, z);
+    over(p.x, p.z).max(over(nose.x, nose.z))
 }
 
 /// Pushes the body circle out of trunks and boulders.

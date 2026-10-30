@@ -2,7 +2,7 @@
 //! the trees, and the camera's post-processing.
 
 use bevy::{
-    anti_alias::taa::TemporalAntiAliasing,
+    anti_alias::{fxaa::Fxaa, taa::TemporalAntiAliasing},
     camera::Exposure,
     core_pipeline::tonemapping::Tonemapping,
     light::{
@@ -24,10 +24,26 @@ const SUN_ELEVATION: f32 = 50.0;
 /// Compass direction the sun shines *from*, in degrees.
 const SUN_AZIMUTH: f32 = 70.0;
 
+/// The WebGL2 build has no compute shaders (so no physical atmosphere or the light it gives),
+/// no screen-space reflections and no TAA: a plain sky colour and ambient light stand in.
+/// `DEER_LITE=1` uses the same renderer natively, to look at it without a browser.
+pub fn lite() -> bool {
+    cfg!(feature = "webgl2") || std::env::var("DEER_LITE").is_ok()
+}
+
 pub fn plugin(app: &mut App) {
-    app.insert_resource(GlobalAmbientLight::NONE)
-        .insert_resource(ClearColor(Color::BLACK))
-        .add_systems(Startup, setup)
+    if lite() {
+        app.insert_resource(GlobalAmbientLight {
+            color: Color::srgb(0.72, 0.8, 0.95),
+            brightness: 2600.0,
+            ..default()
+        })
+        .insert_resource(ClearColor(Color::srgb(0.62, 0.72, 0.86)));
+    } else {
+        app.insert_resource(GlobalAmbientLight::NONE)
+            .insert_resource(ClearColor(Color::BLACK));
+    }
+    app.add_systems(Startup, setup)
         .add_systems(Update, freeze_environment_light);
 }
 
@@ -41,35 +57,42 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
     commands.insert_resource(bevy::light::DirectionalLightShadowMap {
         size: crate::debug::shadow_size().unwrap_or(1024),
     });
-    if !crate::debug::off("atmo") {
+    let lite = lite();
+    if !lite && !crate::debug::off("atmo") {
         commands.spawn(Atmosphere::earth(
             media.add(ScatteringMedium::earth(256, 256)),
         ));
     }
 
-    commands.spawn((
-        DirectionalLight {
-            shadow_maps_enabled: !crate::debug::off("shadows"),
-            illuminance: lux::RAW_SUNLIGHT,
-            // Morning gold, warmer than the atmosphere alone makes it at this height.
-            color: Color::srgb(1.0, 0.86, 0.66),
-            ..default()
-        },
-        Transform::from_translation(sun_direction()).looking_at(Vec3::ZERO, Vec3::Y),
-        {
-            // Two cascades at 1024 px: shadows are mostly overlapping alpha-tested leaf cards, so their
-            // cost is fill rate, and this halves the frame time compared to 3 x 2048 px.
-            let c = crate::debug::cascades().unwrap_or((2, 14.0, 50.0));
-            CascadeShadowConfigBuilder {
-                num_cascades: c.0,
-                first_cascade_far_bound: c.1,
-                maximum_distance: c.2,
+    commands
+        .spawn((
+            DirectionalLight {
+                shadow_maps_enabled: !crate::debug::off("shadows"),
+                // The atmosphere dims raw sunlight on its way down; without it, start dimmer.
+                illuminance: if lite {
+                    lux::DIRECT_SUNLIGHT
+                } else {
+                    lux::RAW_SUNLIGHT
+                },
+                // Morning gold, warmer than the atmosphere alone makes it at this height.
+                color: Color::srgb(1.0, 0.86, 0.66),
                 ..default()
-            }
-            .build()
-        },
-        SunDisk::EARTH,
-    ));
+            },
+            Transform::from_translation(sun_direction()).looking_at(Vec3::ZERO, Vec3::Y),
+            {
+                // Two cascades at 1024 px: shadows are mostly overlapping alpha-tested leaf cards, so their
+                // cost is fill rate, and this halves the frame time compared to 3 x 2048 px.
+                let c = crate::debug::cascades().unwrap_or((2, 14.0, 50.0));
+                CascadeShadowConfigBuilder {
+                    num_cascades: c.0,
+                    first_cascade_far_bound: c.1,
+                    maximum_distance: c.2,
+                    ..default()
+                }
+                .build()
+            },
+        ))
+        .insert_if(SunDisk::EARTH, || !lite);
     if std::env::var("DEER_SHADOW_OC").is_ok() {
         commands.run_system_cached(
             |mut c: Commands, q: Query<Entity, With<DirectionalLight>>| {
@@ -107,7 +130,7 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             .insert(bevy::light::ShadowFilteringMethod::Hardware2x2);
     }
     let mut cam = commands.entity(cam);
-    if !off("atmo") {
+    if !lite && !off("atmo") {
         // The canopy hides most of the sky, so less light comes from it.
         cam.insert(AtmosphereSettings::default());
         if !off("envlight") {
@@ -125,10 +148,12 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             ..Bloom::NATURAL
         });
     }
-    if !off("taa") {
+    if lite {
+        cam.insert(Fxaa::default());
+    } else if !off("taa") {
         cam.insert(TemporalAntiAliasing::default());
     }
-    if !off("ssr") {
+    if !lite && !off("ssr") {
         cam.insert(ScreenSpaceReflections {
             min_perceptual_roughness: 0.0..0.0,
             max_perceptual_roughness: 0.15..0.2,

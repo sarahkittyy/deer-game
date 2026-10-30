@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Builds the static web version into ./dist:
-#   index.html, deer-webgpu.js / _bg.wasm (+ .gz/.br), assets-<hash>/
-# WebGPU only: the lighting (deferred shading, screen-space reflections, volumetric fog, the
-# atmosphere) has no WebGL2 path.
+#   index.html, deer-webgpu.js / _bg.wasm and deer-webgl2.js / _bg.wasm (+ .gz/.br), assets-<hash>/
+# Two builds, like endif-tf: WebGPU has the full lighting (deferred shading, screen-space
+# reflections, the physical atmosphere); WebGL2 (browsers without WebGPU, such as Firefox on
+# Linux) gets a simpler forward-lit version. The page downloads only the one it picks.
 #
-#   ./build-web.sh [profile]     default: wasm-release (use wasm-dev for a quick unoptimised build)
+#   ./build-web.sh [profile] [backends]
+#     profile:  wasm-release (default) or wasm-dev for a quick unoptimised build
+#     backends: "webgpu webgl2" (default), or just one of them while iterating
 #
 # Needs: rustup target wasm32-unknown-unknown, wasm-bindgen-cli matching Cargo.lock,
 # optionally wasm-opt (binaryen) and brotli.
@@ -12,6 +15,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PROFILE="${1:-wasm-release}"
+BACKENDS="${2:-webgpu webgl2}"
 case "$PROFILE" in wasm-release) OPTIMIZE=1 ;; *) OPTIMIZE=0 ;; esac
 PY="$(command -v python3 || command -v python)"
 ASSETS=crates/client/assets
@@ -42,28 +46,38 @@ STAGE="target/web-stage"
 rm -rf "$STAGE"
 mkdir -p "$STAGE" dist
 
-echo "== building deer-webgpu ($PROFILE, $DEER_ASSET_DIR)"
-cargo build -p deer-client --target wasm32-unknown-unknown --profile "$PROFILE" --features webgpu
-wasm-bindgen --target web --no-typescript --out-dir "$STAGE" --out-name deer-webgpu \
-  "target/wasm32-unknown-unknown/$PROFILE/deer-client.wasm"
-if [ "$OPTIMIZE" = 1 ] && [ -n "$WASM_OPT" ]; then
-  echo "running wasm-opt"
-  "$WASM_OPT" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
-    --enable-mutable-globals --enable-reference-types --enable-multivalue \
-    -o "$STAGE/deer-webgpu_bg.wasm" "$STAGE/deer-webgpu_bg.wasm"
-fi
-if [ "$OPTIMIZE" = 1 ]; then
-  for f in "$STAGE/deer-webgpu_bg.wasm" "$STAGE/deer-webgpu.js"; do
-    gzip -9 -k -f "$f"
-    [ "$HAVE_BROTLI" = 1 ] && brotli -f -q 9 -o "$f.br" "$f"
-  done
-fi
+build() {
+  local backend="$1"
+  echo "== building deer-$backend ($PROFILE, $DEER_ASSET_DIR)"
+  cargo build -p deer-client --target wasm32-unknown-unknown --profile "$PROFILE" --features "$backend"
+  wasm-bindgen --target web --no-typescript --out-dir "$STAGE" --out-name "deer-$backend" \
+    "target/wasm32-unknown-unknown/$PROFILE/deer-client.wasm"
+  if [ "$OPTIMIZE" = 1 ] && [ -n "$WASM_OPT" ]; then
+    echo "running wasm-opt"
+    "$WASM_OPT" -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
+      --enable-mutable-globals --enable-reference-types --enable-multivalue \
+      -o "$STAGE/deer-${backend}_bg.wasm" "$STAGE/deer-${backend}_bg.wasm"
+  fi
+  if [ "$OPTIMIZE" = 1 ]; then
+    for f in "$STAGE/deer-${backend}_bg.wasm" "$STAGE/deer-$backend.js"; do
+      gzip -9 -k -f "$f"
+      [ "$HAVE_BROTLI" = 1 ] && brotli -f -q 9 -o "$f.br" "$f"
+    done
+  fi
+}
+for backend in $BACKENDS; do build "$backend"; done
 
-WASM_BYTES="$(wc -c < "$STAGE/deer-webgpu_bg.wasm" | tr -d " ")"
+# A backend left out of this build keeps whatever dist already has.
+size_of() {
+  local f="$STAGE/deer-$1_bg.wasm"
+  [ -f "$f" ] || f="dist/deer-$1_bg.wasm"
+  if [ -f "$f" ]; then wc -c < "$f" | tr -d " "; else echo 0; fi
+}
 CACHE_BUST="$(git rev-parse --short HEAD 2>/dev/null || echo dev)-$(date +%s)"
 sed -e "s|__ASSET_DIR__|$DEER_ASSET_DIR|g" \
     -e "s|__CACHE_BUST__|$CACHE_BUST|g" \
-    -e "s|__WASM_BYTES__|$WASM_BYTES|" \
+    -e "s|__WASM_BYTES_WEBGPU__|$(size_of webgpu)|" \
+    -e "s|__WASM_BYTES_WEBGL2__|$(size_of webgl2)|" \
     web/index.html > "$STAGE/index.html"
 
 # assets: copy once per hash, drop older hashed copies
@@ -74,8 +88,8 @@ fi
 for d in dist/assets-*; do
   [ "$d" != "dist/$DEER_ASSET_DIR" ] && rm -rf "$d"
 done
-rm -f dist/deer-webgpu.js* dist/deer-webgpu_bg.wasm*
+for backend in $BACKENDS; do rm -f "dist/deer-$backend.js"* "dist/deer-${backend}_bg.wasm"*; done
 mv -f "$STAGE"/deer-* dist/
 mv -f "$STAGE/index.html" dist/index.html
 rm -rf "$STAGE"
-echo "web build ready in ./dist ($DEER_ASSET_DIR, wasm $WASM_BYTES bytes)"
+echo "web build ready in ./dist ($DEER_ASSET_DIR; wasm bytes: webgpu $(size_of webgpu), webgl2 $(size_of webgl2))"

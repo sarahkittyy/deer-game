@@ -105,19 +105,18 @@ fn setup(
     image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
     let handle = images.add(image);
 
-    commands
-        .entity(*cam)
-        .insert((
-            RenderTarget::Image(handle.clone().into()),
-            // Sharpen before stretching: most of the crispness lost to the lower resolution
-            // comes back for little cost.
-            ContrastAdaptiveSharpening {
-                enabled: true,
-                sharpening_strength: 0.45,
-                denoise: false,
-            },
-        ))
+    let mut cam = commands.entity(*cam);
+    cam.insert(RenderTarget::Image(handle.clone().into()))
         .remove::<IsDefaultUiCamera>();
+    // Sharpen before stretching: most of the crispness lost to the lower resolution comes back
+    // for little cost. (Not on WebGL2, where Bevy's sharpening pipeline fails to validate.)
+    if !crate::env::lite() {
+        cam.insert(ContrastAdaptiveSharpening {
+            enabled: true,
+            sharpening_strength: 0.45,
+            denoise: false,
+        });
+    }
     // Draws the stretched 3D view, then the UI over it, at the window's full resolution.
     commands.spawn((
         UpscaleCamera,

@@ -42,8 +42,13 @@ DEER_STATIC=dist cargo run -p deer-server
 ```
 
 Then open http://127.0.0.1:3560. `./build-web.sh` with no argument makes the optimised
-release build (wasm-opt, gzip, brotli). The page needs WebGPU; the lighting has no WebGL2
-path. `wasm-bindgen` must match the version in `Cargo.lock`:
+release build (wasm-opt, gzip, brotli). Like endif-tf it builds the game twice: a WebGPU
+version with the full lighting, and a WebGL2 version for browsers without WebGPU (Firefox on
+Linux, for one) that lights everything in a simpler forward pass, with no screen-space
+reflections, physical sky or TAA. The page downloads only the one it picks, falls back to WebGL2
+if the WebGPU one fails to start, and `?backend=webgl2` or `?backend=webgpu` forces one.
+`./build-web.sh wasm-dev webgl2` builds just one, quickly. `wasm-bindgen` must match the
+version in `Cargo.lock`:
 
 ```bash
 cargo binstall -y --install-path target/tools/bin wasm-bindgen-cli@0.2.129
@@ -69,6 +74,7 @@ and run `build-web.sh` with `target/tools/bin` on `PATH`.
 | `DEER_PROFILE=1` | Hidden window, uncapped; print the average frame time from 10 s to 16 s, quit (use with `DEER_SHOT`) |
 | `DEER_OFF=a,b` | Switch features off for profiling: shadows, ssr, taa, bloom, atmo, envlight, trees, detail, wind, beams, ambient, fog |
 | `DEER_RES=WxH` | Size of the off-screen render for `DEER_SHOT` / `DEER_PROFILE` |
+| `DEER_LITE=1` | Use the WebGL2 build's simpler renderer natively, to look at it without a browser |
 | `DEER_SCALE=0.6`, `DEER_NO_SCALE=1` | Force the 3D render scale, or render at full resolution |
 | `DEER_CASCADES=n,first,max`, `DEER_SHADOW_SIZE=px`, `DEER_LOD1=m`, `DEER_LOD2=m` | Shadow and tree-detail tuning |
 

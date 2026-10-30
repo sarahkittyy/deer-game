@@ -281,9 +281,16 @@ impl Prefabs {
             // Small things stop mattering long before the fog; big ones are culled by the far
             // plane, which costs nothing per entity.
             if !shadows {
+                // WebGL2 cannot dither the fade-out (its shader binding fails to validate), so
+                // there they just stop at one distance.
+                let end = if crate::env::lite() {
+                    62.0..62.0
+                } else {
+                    55.0..70.0
+                };
                 e.insert(VisibilityRange {
                     start_margin: 0.0..0.0,
-                    end_margin: 55.0..70.0,
+                    end_margin: end,
                     use_aabb: false,
                 });
             }

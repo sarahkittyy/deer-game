@@ -44,10 +44,12 @@ pub struct GameEntity;
 
 fn main() {
     let mut app = App::new();
-    app
-        // Deferred lighting: the lakes' screen-space reflections need it.
-        .insert_resource(DefaultOpaqueRendererMethod::deferred())
-        .insert_resource(GameWorld(Arc::new(World::generate(WORLD_SEED))))
+    // Deferred lighting: the lakes' screen-space reflections need it. WebGL2 has neither, and
+    // lights everything in the forward pass.
+    if !env::lite() {
+        app.insert_resource(DefaultOpaqueRendererMethod::deferred());
+    }
+    app.insert_resource(GameWorld(Arc::new(World::generate(WORLD_SEED))))
         .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {

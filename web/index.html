@@ -46,7 +46,9 @@
         Patched.prototype = Original.prototype;
         window[name] = Patched;
       }
-      const resume = () => { for (const ctx of contexts) if (ctx.state === "suspended") ctx.resume().catch(() => {}); };
+      const resume = () => {
+        for (const ctx of contexts) if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      };
       for (const ev of ["pointerdown", "keydown", "touchstart"]) window.addEventListener(ev, resume, { capture: true, passive: true });
     })();
 
@@ -72,6 +74,20 @@
       const root = el("loading"), bar = el("loading-bar"), fill = el("loading-fill"), message = el("loading-message");
       const CONTROL_FLOW = "Using exceptions for control flow";
       let finished = false, failed = false, shown = 0, creep = null;
+      // Which build is running, and whether a failure to start may fall back to WebGL2.
+      let backend = null, mayFallBack = false;
+      // The Rust panic message (console_error_panic_hook logs it just before the wasm traps with
+      // a bare "unreachable"), so a crash can say what actually went wrong.
+      let lastPanic = null;
+      const consoleError = console.error.bind(console);
+      console.error = (...args) => {
+        const m = args.map((a) => `${a}`).join(" ");
+        if (m.includes("panicked at")) lastPanic = m;
+        consoleError(...args);
+      };
+      const isCrash = (err, text) =>
+        (typeof WebAssembly !== "undefined" && err instanceof WebAssembly.RuntimeError) ||
+        /unreachable|RuntimeError|panicked at/.test(text);
       const progress = (fraction) => {
         if (finished || failed) return;
         bar.classList.remove("indeterminate");
@@ -85,12 +101,28 @@
         creep = setInterval(() => progress(shown + (0.97 - shown) * 0.04), 200);
       };
       const fail = (msg) => {
-        if (finished || failed) return;
+        if (failed) return;
+        let text = `${msg}`;
+        if (lastPanic && /unreachable|RuntimeError/.test(text)) text = lastPanic;
+        // The WebGPU build did not get going in this browser: try the WebGL2 one instead.
+        if (!finished && backend === "webgpu" && mayFallBack) {
+          failed = true;
+          consoleError(`deer game: the WebGPU build failed to start (${text}); reloading with WebGL2`);
+          const params = new URLSearchParams(location.search);
+          params.set("backend", "webgl2");
+          location.replace(`${location.pathname}?${params}${location.hash}`);
+          return;
+        }
         failed = true;
         clearInterval(creep);
         bar.style.display = "none";
-        message.textContent = `${msg}`.slice(0, 400);
-        console.error("deer game failed to start:", msg);
+        message.textContent = (finished ? `the game crashed: ${text}` : text).slice(0, 600);
+        if (finished) {
+          // Already playing: bring the screen back to show what happened.
+          root.style.display = "";
+          root.classList.remove("done");
+        }
+        consoleError("deer game failed:", text);
       };
       // The wasm download fills most of the bar; the rest waits for the world to be built.
       const downloadWasm = async (url, expected) => {
@@ -118,25 +150,56 @@
         finished = true;
         clearInterval(creep);
         root.classList.add("done");
-        setTimeout(() => root.remove(), 900);
+        setTimeout(() => { if (!failed) root.style.display = "none"; }, 900);
       };
-      window.deerLoading = { downloadWasm, fail, CONTROL_FLOW };
-      window.addEventListener("error", (e) => { const m = `${e.message || e.error || e}`; if (!m.includes(CONTROL_FLOW)) fail(m); });
-      window.addEventListener("unhandledrejection", (e) => { const m = `${e.reason}`; if (!m.includes(CONTROL_FLOW)) fail(m); });
+      const setBackend = (b, fallBack) => { backend = b; mayFallBack = fallBack; };
+      window.deerLoading = { downloadWasm, fail, setBackend, CONTROL_FLOW };
+      // Only the game itself crashing is fatal. Anything else (an audio context closing before
+      // it resumed, a browser extension's script) is logged and otherwise ignored.
+      window.addEventListener("error", (e) => {
+        const m = `${e.message || e.error || e}`;
+        if (m.includes(CONTROL_FLOW)) return;
+        if (isCrash(e.error, m)) fail(m); else console.warn("deer game: ignored error:", m);
+      });
+      window.addEventListener("unhandledrejection", (e) => {
+        const m = `${e.reason}`;
+        if (m.includes(CONTROL_FLOW)) return;
+        if (isCrash(e.reason, m)) fail(m); else console.warn("deer game: ignored rejection:", m);
+      });
     })();
   </script>
   <script type="module">
-    const { downloadWasm, fail, CONTROL_FLOW } = window.deerLoading;
+    // Two builds ship (build-web.sh): deer-webgpu for browsers that hand out a WebGPU adapter,
+    // and deer-webgl2 for the rest. Only the chosen one is downloaded. `?backend=webgl2|webgpu`
+    // forces one; a forced choice never falls back.
+    const { downloadWasm, fail, setBackend, CONTROL_FLOW } = window.deerLoading;
+    const params = new URLSearchParams(location.search);
+    const forced = params.get("backend");
+    const WASM_BYTES = { webgpu: Number("__WASM_BYTES_WEBGPU__") || 0, webgl2: Number("__WASM_BYTES_WEBGL2__") || 0 };
+    const pickBackend = async () => {
+      if (forced === "webgl2" || forced === "webgpu") return [forced, "forced by ?backend="];
+      if (!navigator.gpu) return ["webgl2", "navigator.gpu is missing"];
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        return adapter ? ["webgpu", "WebGPU adapter available"] : ["webgl2", "requestAdapter() returned null"];
+      } catch (e) {
+        return ["webgl2", `requestAdapter() failed: ${e}`];
+      }
+    };
+    const hasWebGL2 = () => {
+      try { return !!document.createElement("canvas").getContext("webgl2"); } catch (e) { return false; }
+    };
     (async () => {
-      let adapter = null;
-      try { adapter = navigator.gpu && (await navigator.gpu.requestAdapter()); } catch (e) { adapter = null; }
-      if (!adapter) {
-        fail("this browser has no WebGPU. try a recent Chrome, Edge, Safari or Firefox.");
+      const [backend, why] = await pickBackend();
+      console.info(`deer game renderer: ${backend} (${why})`);
+      if (backend === "webgl2" && !hasWebGL2()) {
+        fail("this browser can't draw the game (no WebGPU or WebGL2). try turning on hardware acceleration in its settings, or a recent Chrome, Edge, Safari or Firefox.");
         return;
       }
+      setBackend(backend, backend === "webgpu" && !forced);
       try {
-        const { default: init } = await import("./deer-webgpu.js?v=__CACHE_BUST__");
-        await init({ module_or_path: downloadWasm(new URL("./deer-webgpu_bg.wasm?v=__CACHE_BUST__", import.meta.url), Number("__WASM_BYTES__") || 0) });
+        const { default: init } = await import(`./deer-${backend}.js?v=__CACHE_BUST__`);
+        await init({ module_or_path: downloadWasm(new URL(`./deer-${backend}_bg.wasm?v=__CACHE_BUST__`, import.meta.url), WASM_BYTES[backend]) });
       } catch (e) {
         if (`${e}`.includes(CONTROL_FLOW)) return;
         fail(e);

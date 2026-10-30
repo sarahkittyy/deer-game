@@ -35,6 +35,11 @@ struct WaterSettings {
 }
 
 impl MaterialExtension for WaterExt {
+    /// The WebGL2 build lights everything in the forward pass.
+    fn fragment_shader() -> ShaderRef {
+        "shaders/water_forward.wesl".into()
+    }
+
     fn deferred_fragment_shader() -> ShaderRef {
         "shaders/water.wesl".into()
     }
