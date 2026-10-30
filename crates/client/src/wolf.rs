@@ -292,6 +292,9 @@ fn on_net(
     ghosts: Query<(&Ghost, &Wrapped), Without<Wolf>>,
     mut wolves: Query<(Entity, &mut Wolf, &Wrapped)>,
 ) {
+    // A long frame can bring several snapshots at once, and a wolf spawned for the first is not
+    // in the query yet: without this, each later one would spawn another copy of it.
+    let mut spawned = std::collections::HashSet::new();
     for ev in events.read() {
         match ev {
             NetEvent::Disconnected | NetEvent::Welcome { .. } | NetEvent::NewWorld => {
@@ -303,7 +306,9 @@ fn on_net(
                 for (i, s) in states.iter().enumerate() {
                     let i = i as u8;
                     let Some((_, mut w, _)) = wolves.iter_mut().find(|(_, w, _)| w.id == i) else {
-                        spawn(&mut commands, &assets, i, Vec3::from_array(s.pos), s.yaw);
+                        if spawned.insert(i) {
+                            spawn(&mut commands, &assets, i, Vec3::from_array(s.pos), s.yaw);
+                        }
                         continue;
                     };
                     w.vel = Vec2::from_array(s.vel);

@@ -23,8 +23,11 @@ use deer_shared::{
 };
 use std::collections::HashMap;
 
-/// Ground cover exists in chunks whose centre is within this distance of the player.
-const DETAIL_RADIUS: f32 = 80.0;
+/// Ground cover exists in chunks whose centre is within this distance of the player: its
+/// furthest visible distance plus most of a chunk, so what is drawn is nearly always there.
+fn detail_radius() -> f32 {
+    if crate::env::lite() { 64.0 } else { 80.0 }
+}
 const DETAIL_CELL: f32 = 1.6;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -284,7 +287,7 @@ impl Prefabs {
                 // WebGL2 cannot dither the fade-out (its shader binding fails to validate), so
                 // there they just stop at one distance.
                 let end = if crate::env::lite() {
-                    62.0..62.0
+                    45.0..45.0
                 } else {
                     55.0..70.0
                 };
@@ -840,6 +843,10 @@ fn update_lods(
 ) {
     let f = focus.0;
     let lods = &mut *lods;
+    let dists = [
+        crate::debug::knob("DEER_LOD1").unwrap_or(LOD_DISTANCES[0]),
+        crate::debug::knob("DEER_LOD2").unwrap_or(LOD_DISTANCES[1]),
+    ];
     for j in 0..CHUNKS {
         for i in 0..CHUNKS {
             let idx = j * CHUNKS + i;
@@ -848,10 +855,6 @@ fn update_lods(
             let d = Vec2::new(wrap_delta(cx - f.x), wrap_delta(cz - f.z)).length();
             // A little hysteresis so a chunk on the boundary does not flicker between levels.
             let cur = lods.level[idx];
-            let dists = [
-                crate::debug::knob("DEER_LOD1").unwrap_or(LOD_DISTANCES[0]),
-                crate::debug::knob("DEER_LOD2").unwrap_or(LOD_DISTANCES[1]),
-            ];
             let level = dists
                 .iter()
                 .enumerate()
@@ -885,6 +888,7 @@ fn update_detail(
     mut detail: ResMut<DetailChunks>,
 ) {
     let f = focus.0;
+    let radius = detail_radius();
     let mut spawned_this_frame = 0;
     for j in 0..CHUNKS {
         for i in 0..CHUNKS {
@@ -893,7 +897,7 @@ fn update_detail(
             let cz = j as f32 * CHUNK + CHUNK * 0.5;
             let d = Vec2::new(wrap_delta(cx - f.x), wrap_delta(cz - f.z)).length();
             let have = detail.0.get(&idx).copied();
-            if d < DETAIL_RADIUS && have.is_none() && !crate::debug::off("detail") {
+            if d < radius && have.is_none() && !crate::debug::off("detail") {
                 // Spread the work: a couple of chunks per frame.
                 if spawned_this_frame >= 2 {
                     continue;
@@ -909,7 +913,7 @@ fn update_detail(
                     .id();
                 spawn_detail(&mut commands, &prefabs, &world.0, i, j, root);
                 detail.0.insert(idx, root);
-            } else if d > DETAIL_RADIUS + 16.0
+            } else if d > radius + 16.0
                 && let Some(e) = have
             {
                 commands.entity(e).despawn();

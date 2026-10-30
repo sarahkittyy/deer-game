@@ -1,5 +1,5 @@
 //! The little row in the top-left corner while playing: the chat icon (press T) and the heart,
-//! which berries fill and time slowly empties.
+//! which berries and water fill and time slowly empties.
 
 use crate::{AppState, GameEntity};
 use bevy::{
@@ -9,10 +9,15 @@ use bevy::{
 
 /// How much of the heart one berry fills.
 pub const BERRY_HEART: f32 = 0.15;
+/// How much of the heart one full drink of water fills: two and a half berries.
+pub const DRINK_HEART: f32 = BERRY_HEART * 2.5;
 /// How fast the heart empties, per second: a berry a minute keeps it level.
 const DRAIN: f32 = BERRY_HEART / 60.0;
 /// The heart at the start of each visit.
 const START: f32 = 0.5;
+/// From here up the heart looks completely full: a berry's worth, a minute's grace before it
+/// visibly starts to empty.
+const LOOKS_FULL: f32 = 1.0 - BERRY_HEART;
 /// The chat icon and the heart are both 38 x 34 pixel art (outline included), shown at one and a
 /// half times that
 /// (three screen pixels per art pixel on a high-density screen), pixels kept sharp.
@@ -31,6 +36,10 @@ impl Default for Heart {
 impl Heart {
     pub fn eat_berry(&mut self) {
         self.0 = (self.0 + BERRY_HEART).min(1.0);
+    }
+
+    pub fn drink(&mut self, amount: f32) {
+        self.0 = (self.0 + amount).min(1.0);
     }
 }
 
@@ -136,8 +145,9 @@ fn drain_and_show(
 ) {
     let Some(mut heart) = heart else { return };
     heart.0 = (heart.0 - DRAIN * time.delta_secs()).max(0.0);
-    // The art's top and bottom rows are not all heart; map the fill onto the rows that are.
-    let shown = (2.0 + heart.0 * 30.0) / 34.0;
+    // The art's top and bottom rows are outline; map the fill onto the 32 red rows between, the
+    // lowest always showing, and the top outline along with the last of them.
+    let shown = (2.0 + (heart.0 / LOOKS_FULL).min(1.0) * 32.0) / 34.0;
     if let Ok(mut node) = fill.single_mut() {
         let h = percent(if heart.0 <= 0.0 { 0.0 } else { shown * 100.0 });
         if node.height != h {

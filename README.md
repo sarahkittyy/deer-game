@@ -114,6 +114,8 @@ What keeps it fast (measured with `DEER_PROFILE`, see `crates/client/src/debug.r
 - **Frozen sky lighting**: the atmosphere's environment map is generated once, then kept.
 - **Streaming**: ground cover and berry bushes only exist near the player; small things also
   have distance cut-offs.
+- **WebGL2** spends more CPU per frame than WebGPU, so its fog closes in sooner, its far plane
+  is nearer and its ground cover stops at 45 m rather than 70 m.
 
 ## Deploying
 

@@ -4,7 +4,10 @@
 use bevy::{
     anti_alias::{fxaa::Fxaa, taa::TemporalAntiAliasing},
     camera::Exposure,
-    core_pipeline::tonemapping::Tonemapping,
+    core_pipeline::{
+        prepass::{DeferredPrepass, DepthPrepass},
+        tonemapping::Tonemapping,
+    },
     light::{
         Atmosphere, AtmosphereEnvironmentMapLight, CascadeShadowConfigBuilder, EnvironmentMapLight,
         SunDisk, atmosphere::ScatteringMedium, light_consts::lux,
@@ -115,7 +118,7 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
                 fov: 70f32.to_radians(),
                 near: 0.05,
                 // Just past where the fog turns opaque.
-                far: 215.0,
+                far: if lite { 150.0 } else { 215.0 },
                 ..default()
             }),
             Transform::from_xyz(40.0, 8.0, 40.0).looking_at(Vec3::new(60.0, 4.0, 60.0), Vec3::Y),
@@ -159,14 +162,19 @@ fn setup(mut commands: Commands, mut media: ResMut<Assets<ScatteringMedium>>) {
             max_perceptual_roughness: 0.15..0.2,
             ..default()
         });
+    } else if !lite {
+        // Reflections bring these with them, and the materials are deferred with or without.
+        cam.insert((DepthPrepass, DeferredPrepass));
     }
     if !off("fog") {
         cam.insert(DistanceFog {
             color: Color::srgba(0.62, 0.62, 0.72, 1.0),
             directional_light_color: Color::srgba(1.0, 0.72, 0.45, 0.6),
             directional_light_exponent: 12.0,
+            // WebGL2 pays for every draw on the CPU, so its fog closes in sooner and hides half
+            // the forest's trees behind the far plane.
             falloff: FogFalloff::from_visibility_colors(
-                190.0,
+                if lite { 132.0 } else { 190.0 },
                 Color::srgb(0.56, 0.60, 0.68),
                 Color::srgb(0.88, 0.82, 0.78),
             ),

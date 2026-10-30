@@ -65,6 +65,8 @@ struct Bite {
 #[derive(Resource, Default)]
 struct Sips {
     next: f32,
+    /// How much of the heart this drink has yet to fill.
+    heart_left: f32,
 }
 
 /// Seconds until the next bite may start.
@@ -286,6 +288,7 @@ fn act(
             }
             d.start(Action::Drinking, DRINK_SECS);
             sips.next = 0.0;
+            sips.heart_left = crate::hud::DRINK_HEART;
         }
         Target::None => {}
     }
@@ -364,6 +367,7 @@ fn drink(
     time: Res<Time>,
     world: Res<GameWorld>,
     mut sips: ResMut<Sips>,
+    mut heart: Option<ResMut<crate::hud::Heart>>,
     mut deer: Query<(&mut LocalDeer, &Mouth)>,
 ) {
     let Ok((mut d, mouth)) = deer.single_mut() else {
@@ -384,7 +388,15 @@ fn drink(
     let at = Vec3::new(ahead.x, surface, ahead.z);
     d.reach = Some(at);
     if mouth.mouth.distance(at) < TOUCH * 1.6 {
-        sips.next -= time.delta_secs();
+        // Fill steadily over what's left of the drink, so the time spent walking in doesn't cost
+        // any of it; walking off early keeps what's been drunk so far.
+        let dt = time.delta_secs();
+        let gulp = sips.heart_left * (dt / d.action_left.max(dt)).min(1.0);
+        sips.heart_left -= gulp;
+        if let Some(heart) = heart.as_mut() {
+            heart.drink(gulp);
+        }
+        sips.next -= dt;
         if sips.next <= 0.0 {
             sips.next = SIP_EVERY;
             commands.trigger(Sfx::Drink(mouth.mouth));

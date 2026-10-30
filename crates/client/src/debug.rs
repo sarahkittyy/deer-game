@@ -255,7 +255,13 @@ pub fn off(feature: &str) -> bool {
 }
 
 /// `DEER_PROFILE=1`: averages the frame time from 10 s to 16 s after start, prints it, quits.
-fn profile(time: Res<Time<Real>>, mut samples: Local<Vec<f32>>, mut exit: MessageWriter<AppExit>) {
+fn profile(
+    time: Res<Time<Real>>,
+    entities: Query<Entity>,
+    meshes: Query<(), With<Mesh3d>>,
+    mut samples: Local<Vec<f32>>,
+    mut exit: MessageWriter<AppExit>,
+) {
     let t = time.elapsed_secs();
     if t > 10.0 {
         samples.push(time.delta_secs() * 1000.0);
@@ -264,11 +270,14 @@ fn profile(time: Res<Time<Real>>, mut samples: Local<Vec<f32>>, mut exit: Messag
         let mut s = samples.clone();
         s.sort_by(|a, b| a.total_cmp(b));
         let avg = s.iter().sum::<f32>() / s.len().max(1) as f32;
+        let p50 = s.get(s.len() / 2).copied().unwrap_or(0.0);
         let p95 = s.get(s.len() * 95 / 100).copied().unwrap_or(0.0);
         println!(
-            "PROFILE off={} avg {avg:.2} ms ({:.0} fps) p95 {p95:.2} ms",
+            "PROFILE off={} avg {avg:.2} ms ({:.0} fps) p50 {p50:.2} ms p95 {p95:.2} ms, {} entities, {} meshes",
             std::env::var("DEER_OFF").unwrap_or_default(),
-            1000.0 / avg
+            1000.0 / avg,
+            entities.iter().len(),
+            meshes.iter().len()
         );
         exit.write(AppExit::Success);
     }

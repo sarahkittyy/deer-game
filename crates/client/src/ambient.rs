@@ -457,10 +457,16 @@ fn animal_ready(
         commands.entity(e).insert(NotShadowCaster);
         if let Ok(m) = mesh_materials.get(e)
             && let Some(mut mat) = materials.get_mut(&m.0)
-            && mat.metallic > 0.0
         {
-            mat.metallic = 0.0;
-            mat.perceptual_roughness = 0.7;
+            if mat.metallic > 0.0 {
+                mat.metallic = 0.0;
+                mat.perceptual_roughness = 0.7;
+            }
+            // Exported as blended, even the solid body: without depth writes the far side and the
+            // fur cards draw over the near side. Their alpha is a cutout anyway.
+            if matches!(mat.alpha_mode, AlphaMode::Blend) {
+                mat.alpha_mode = AlphaMode::Mask(0.5);
+            }
         }
         if let Ok(mut p) = players.get_mut(e) {
             p.play(clips.idle).repeat();
