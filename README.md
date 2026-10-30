@@ -10,10 +10,10 @@ A few wolves roam the whole forest. They are the server's: it decides where they
 who they go after, and clients draw them in the present (carried on with their last velocity,
 easing onto each new snapshot), not a snapshot behind like other deer. A wolf that spots a deer barks,
 gives it a second to stop and look round, and stares it down, barking; stared at for 10 s, or looked away from, it walks slowly up. Turn and
-run and it chases, a little faster than you can gallop. Within about a deer's length it pounces,
+run and it chases, at a fixed speed: a deer with its heart 80% full or more outruns it, and one with less doesn't. Within about a deer's length it pounces,
 and your deer is knocked flying (`knock.rs`): away from the wolf, high or far but never up into
 the leaves, bouncing off trunks at any height, then lying a moment and getting up, with the heart
-nearly emptied. Other players see the tumble too. The wolf then leaves deer alone for 10 s.
+nearly emptied. Other players see the tumble too. The wolf then leaves deer alone for 15 s.
 
 ## Layout
 

@@ -1,13 +1,13 @@
 //! Wolves: a few hostile animals the server runs for everyone. A wolf wanders until a deer comes
 //! within sight, then stares it down, barking. Watched for too long (or looked away from), it
-//! walks slowly up to the deer; a deer that turns and runs is chased at a little over its own
-//! top speed. Within about a deer's length the wolf pounces, and the deer's own game knocks it
+//! walks slowly up to the deer; a deer that turns and runs is chased at a fixed speed that only a
+//! healthy deer can outrun. Within about a deer's length the wolf pounces, and the deer's own game knocks it
 //! flying. Then the wolf loses interest for a while.
 
 use deer_shared::{
     protocol::{
         Action, Pose, ServerMsg, WolfCall, WolfMood, WolfState,
-        wolf::{CHASE_FACTOR, LEAP_SECS, POUNCE_RANGE, SPOT_RADIUS, STALK_SPEED, WANDER_SPEED},
+        wolf::{CHASE_SPEED, LEAP_SECS, POUNCE_RANGE, SPOT_RADIUS, STALK_SPEED, WANDER_SPEED},
     },
     world::{WATER_LEVEL, World, wrap, wrap_delta},
 };
@@ -15,9 +15,8 @@ use std::collections::HashSet;
 use std::f32::consts::{PI, TAU};
 use tracing::info;
 
-/// The deer's walk and top gallop at an ordinary pace (as in the client's `deer.rs`).
+/// The deer's walk at an ordinary pace (as in the client's `deer.rs`).
 const DEER_WALK: f32 = 1.9;
-const DEER_RUN: f32 = 7.5;
 /// How long a deer can stare a wolf down before it starts walking up anyway.
 const STARE_LIMIT: f32 = 10.0;
 /// A deer further than this gets away.
@@ -25,7 +24,7 @@ const LOSE_RADIUS: f32 = 48.0;
 /// A chase this long ends in the wolf giving up.
 const CHASE_GIVE_UP: f32 = 30.0;
 /// After an attack (or losing a deer), how long before the wolf picks on anyone again.
-const AGGRO_COOLDOWN: f32 = 10.0;
+const AGGRO_COOLDOWN: f32 = 15.0;
 const LOST_COOLDOWN: f32 = 4.0;
 const REST_SECS: f32 = 2.0;
 const BODY_RADIUS: f32 = 0.4;
@@ -326,10 +325,9 @@ impl Wolf {
                     }
                     _ => {
                         // Head for where the deer will be, a moment from now.
-                        let speed = DEER_RUN * pace.max(0.5) * CHASE_FACTOR;
-                        let lead = (dist / speed).min(0.5);
+                        let lead = (dist / CHASE_SPEED).min(0.5);
                         let ahead = to.add(heading.scale(pose.speed * lead));
-                        want = ahead.norm().scale(speed);
+                        want = ahead.norm().scale(CHASE_SPEED);
                     }
                 }
             }
@@ -453,7 +451,7 @@ mod tests {
             pos: [wrap(at[0] + 10.0), 0.0, at[1]],
             body_yaw: away,
             look: away,
-            speed: DEER_RUN,
+            speed: 7.5,
             pace: 1.0,
             ..Default::default()
         };
@@ -478,5 +476,36 @@ mod tests {
             "{moods:?}"
         );
         assert_eq!(moods[29], WolfMood::Chase);
+    }
+
+    /// The chase is as fast whatever the state of the deer's heart.
+    #[test]
+    fn chase_speed_ignores_pace() {
+        let world = World::generate(1);
+        let at = world.spawn_point(0);
+        for pace in [0.5, 1.5] {
+            let mut pack = Pack::new(&world, 1);
+            pack.test_met = None;
+            let w = &mut pack.wolves[0];
+            w.pos = V(at[0], at[1]);
+            w.target = Some(7);
+            w.mood = WolfMood::Chase;
+            // Far off, galloping straight away.
+            let away = -std::f32::consts::FRAC_PI_2;
+            let pose = Pose {
+                pos: [wrap(at[0] + 40.0), 0.0, at[1]],
+                body_yaw: away,
+                look: away,
+                speed: 7.5 * pace,
+                pace,
+                ..Default::default()
+            };
+            let mut out = Vec::new();
+            for _ in 0..10 {
+                pack.tick(0.05, &world, &[(7, pose)], &mut out);
+            }
+            let speed = pack.wolves[0].vel.len();
+            assert!((speed - CHASE_SPEED).abs() < 0.1, "{pace}: {speed}");
+        }
     }
 }

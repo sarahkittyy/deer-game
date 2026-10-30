@@ -61,8 +61,9 @@ pub mod wolf {
     pub const WANDER_SPEED: f32 = 1.5;
     /// The slow walk towards a deer that has stared too long (or looked away).
     pub const STALK_SPEED: f32 = 1.1;
-    /// Chasing: this much faster than the deer's own top gallop.
-    pub const CHASE_FACTOR: f32 = 1.12;
+    /// Chasing, however fast the deer: just under the gallop of a deer with a heart 80% full
+    /// (9.75 m/s; a full heart gallops at 11.25), so only a healthy deer gets away.
+    pub const CHASE_SPEED: f32 = 9.6;
     /// Starts the pounce this far from the deer (about a deer's length, plus the leap's reach).
     pub const POUNCE_RANGE: f32 = 2.2;
     /// The pounce: a leap this long, hitting the deer this far into it.

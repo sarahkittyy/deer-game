@@ -42,11 +42,16 @@ const APPROACH_SECS: f32 = 1.4;
 const CHEW_SECS: f32 = 0.9;
 /// Pause after chewing before the next bite.
 const COOLDOWN_SECS: f32 = 0.5;
-/// The mouth counts as on the berry / in the water within this distance.
+/// The mouth counts as on the berry within this distance.
 const TOUCH: f32 = 0.12;
 const SIP_EVERY: f32 = 1.1;
 /// How far in front of the body the mouth meets the water: past the front hooves.
 const DRINK_AHEAD: f32 = 1.1;
+/// Walks in until the ground under the deer is this far below the surface, if it can: from any
+/// higher up the neck doesn't quite bring the mouth down to the water.
+const DRINK_WADE: f32 = 0.1;
+/// How long the head takes to go down once the deer has stopped walking in; then it sips.
+const HEAD_DOWN_SECS: f32 = 0.7;
 
 /// A bite in progress.
 #[derive(Resource)]
@@ -67,6 +72,8 @@ struct Sips {
     next: f32,
     /// How much of the heart this drink has yet to fill.
     heart_left: f32,
+    /// How long the deer has been standing with its head going down.
+    head_down: f32,
 }
 
 /// Seconds until the next bite may start.
@@ -276,7 +283,9 @@ fn act(
                         break;
                     }
                     spot = p;
-                    if wet(p + dir * DRINK_AHEAD) {
+                    if wet(p + dir * DRINK_AHEAD)
+                        && world.0.height(p.x, p.y) < WATER_LEVEL - DRINK_WADE
+                    {
                         break;
                     }
                     along += 0.1;
@@ -289,6 +298,7 @@ fn act(
             d.start(Action::Drinking, DRINK_SECS);
             sips.next = 0.0;
             sips.heart_left = crate::hud::DRINK_HEART;
+            sips.head_down = 0.0;
         }
         Target::None => {}
     }
@@ -387,7 +397,12 @@ fn drink(
     let surface = world.0.height(ahead.x, ahead.z).max(WATER_LEVEL) + 0.02;
     let at = Vec3::new(ahead.x, surface, ahead.z);
     d.reach = Some(at);
-    if mouth.mouth.distance(at) < TOUCH * 1.6 {
+    if d.approach.is_none() {
+        sips.head_down += time.delta_secs();
+    }
+    // Not gated on the mouth touching the water: a neck that falls just short of it on a steep
+    // shore still has to count, or the deer drinks for nothing.
+    if sips.head_down > HEAD_DOWN_SECS {
         // Fill steadily over what's left of the drink, so the time spent walking in doesn't cost
         // any of it; walking off early keeps what's been drunk so far.
         let dt = time.delta_secs();
